@@ -24,6 +24,7 @@ export default function ProfilePhotoUpload({
 
     setUploading(true);
     setError(null);
+    setImageError(false);
 
     try {
       const supabase = createClient();
@@ -38,7 +39,6 @@ export default function ProfilePhotoUpload({
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
-
       const publicUrl = data.publicUrl;
 
       const { error: updateError } = await supabase
@@ -61,10 +61,6 @@ export default function ProfilePhotoUpload({
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
       <h2 className="text-lg font-semibold text-white">Profile Photo</h2>
-
-      <p className="text-xs text-red-400 break-all">
-  {currentAvatarUrl}
-</p>
 
       <div className="mt-4 flex items-center gap-4">
         <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white/10 text-xl text-white">

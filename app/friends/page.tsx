@@ -21,25 +21,47 @@ async function addFriend(formData: FormData) {
     redirect("/friends");
   }
 
-  const { data: existing } = await supabase
-    .from("friends")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .eq("friend_id", friendId)
-    .maybeSingle();
+  const [{ data: existingFriendRows }, { data: existingRequest }, { data: senderProfile }] =
+    await Promise.all([
+      supabase
+        .from("friends")
+        .select("user_id, friend_id")
+        .or(
+          `and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`
+        ),
+      supabase
+        .from("notifications")
+        .select("id")
+        .eq("type", "friend_request")
+        .eq("actor_id", user.id)
+        .eq("user_id", friendId)
+        .maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .maybeSingle(),
+    ]);
 
-  if (existing) {
+  const alreadyFriends = (existingFriendRows ?? []).length > 0;
+
+  if (alreadyFriends || existingRequest) {
     redirect("/friends");
   }
 
-  const { error } = await supabase.from("friends").insert({
-    user_id: user.id,
-    friend_id: friendId,
+  const senderName = senderProfile?.display_name || "Someone";
+
+  const { error } = await supabase.from("notifications").insert({
+    user_id: friendId,
+    type: "friend_request",
+    actor_id: user.id,
+    message: `${senderName} sent you a friend request`,
+    read: false,
   });
 
   if (error) {
-    console.error("Error adding friend:", error);
-    throw new Error("Failed to add friend");
+    console.error("Error sending friend request:", error);
+    throw new Error("Failed to send friend request");
   }
 
   redirect("/friends");
@@ -80,13 +102,29 @@ export default async function FriendsPage({
 
   const { q = "" } = await searchParams;
 
-  const { data: friendRows } = await supabase
-    .from("friends")
-    .select("friend_id")
-    .eq("user_id", user.id);
+  const [{ data: friendRows }, { data: requestRows }] = await Promise.all([
+    supabase.from("friends").select("friend_id").eq("user_id", user.id),
+    supabase
+      .from("notifications")
+      .select("actor_id, user_id, type")
+      .eq("type", "friend_request")
+      .or(`actor_id.eq.${user.id},user_id.eq.${user.id}`),
+  ]);
 
   const friendIds = friendRows?.map((row) => row.friend_id) ?? [];
   const excludedIds = [user.id, ...friendIds];
+
+  const outgoingRequestIds = new Set(
+    (requestRows ?? [])
+      .filter((row) => row.actor_id === user.id)
+      .map((row) => row.user_id)
+  );
+
+  const incomingRequestIds = new Set(
+    (requestRows ?? [])
+      .filter((row) => row.user_id === user.id)
+      .map((row) => row.actor_id)
+  );
 
   let friendsList: ProfileRow[] = [];
 
@@ -109,8 +147,7 @@ export default async function FriendsPage({
       .neq("id", user.id)
       .limit(20);
 
-    searchResults =
-      profiles?.filter((profile) => !friendIds.includes(profile.id)) ?? [];
+    searchResults = profiles ?? [];
   }
 
   let suggestedFriends: SuggestedFriend[] = [];
@@ -194,39 +231,66 @@ export default async function FriendsPage({
             </p>
           ) : (
             <div className="space-y-3">
-              {suggestedFriends.map((profile) => (
-                <div
-                  key={profile.id}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                >
-                    <Link
-                    href={`/user/${profile.id}`}
-                    className="flex items-center gap-3 hover:opacity-80 transition"
-                    >
-                    <InitialAvatar name={profile.display_name} />
+              {suggestedFriends.map((profile) => {
+                const isFriend = friendIds.includes(profile.id);
+                const isPending = outgoingRequestIds.has(profile.id);
+                const hasIncomingRequest = incomingRequestIds.has(profile.id);
 
-                    <div>
+                return (
+                  <div
+                    key={profile.id}
+                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                  >
+                    <Link
+                      href={`/user/${profile.id}`}
+                      className="flex items-center gap-3 transition hover:opacity-80"
+                    >
+                      <InitialAvatar name={profile.display_name} />
+
+                      <div>
                         <p className="font-medium">
-                        {profile.display_name || "Unnamed user"}
+                          {profile.display_name || "Unnamed user"}
                         </p>
                         <p className="text-sm text-white/50">
-                        {profile.mutualCount} mutual{" "}
-                        {profile.mutualCount === 1 ? "friend" : "friends"}
+                          {profile.mutualCount} mutual{" "}
+                          {profile.mutualCount === 1 ? "friend" : "friends"}
                         </p>
-                    </div>
+                      </div>
                     </Link>
 
-                  <form action={addFriend}>
-                    <input type="hidden" name="friend_id" value={profile.id} />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
-                    >
-                      Add Friend
-                    </button>
-                  </form>
-                </div>
-              ))}
+                    {isFriend ? (
+                      <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
+                        Friends
+                      </div>
+                    ) : hasIncomingRequest ? (
+                      <Link
+                        href="/notifications"
+                        className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
+                      >
+                        Respond
+                      </Link>
+                    ) : isPending ? (
+                      <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
+                        Pending
+                      </div>
+                    ) : (
+                      <form action={addFriend}>
+                        <input
+                          type="hidden"
+                          name="friend_id"
+                          value={profile.id}
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
+                        >
+                          Send Request
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
@@ -240,30 +304,57 @@ export default async function FriendsPage({
             <p className="text-sm text-white/50">No users found.</p>
           ) : (
             <div className="space-y-3">
-              {searchResults.map((profile) => (
-                <div
-                  key={profile.id}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <InitialAvatar name={profile.display_name} />
+              {searchResults.map((profile) => {
+                const isFriend = friendIds.includes(profile.id);
+                const isPending = outgoingRequestIds.has(profile.id);
+                const hasIncomingRequest = incomingRequestIds.has(profile.id);
 
-                    <p className="font-medium">
-                      {profile.display_name || "Unnamed user"}
-                    </p>
+                return (
+                  <div
+                    key={profile.id}
+                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <InitialAvatar name={profile.display_name} />
+
+                      <p className="font-medium">
+                        {profile.display_name || "Unnamed user"}
+                      </p>
+                    </div>
+
+                    {isFriend ? (
+                      <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
+                        Friends
+                      </div>
+                    ) : hasIncomingRequest ? (
+                      <Link
+                        href="/notifications"
+                        className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
+                      >
+                        Respond
+                      </Link>
+                    ) : isPending ? (
+                      <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
+                        Pending
+                      </div>
+                    ) : (
+                      <form action={addFriend}>
+                        <input
+                          type="hidden"
+                          name="friend_id"
+                          value={profile.id}
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
+                        >
+                          Send Request
+                        </button>
+                      </form>
+                    )}
                   </div>
-
-                  <form action={addFriend}>
-                    <input type="hidden" name="friend_id" value={profile.id} />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
-                    >
-                      Add Friend
-                    </button>
-                  </form>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

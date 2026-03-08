@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/server";
+import { ArrowLeft } from "lucide-react";
 
 type EventDetailsPageProps = {
   params: Promise<{
@@ -51,7 +52,7 @@ export default async function EventDetailsPage({
 
   if (Number.isNaN(eventId) || error || !event) {
     return (
-      <main className="min-h-screen bg-black text-white px-4 py-10">
+      <main className="min-h-screen bg-black px-4 py-10 text-white">
         <div className="mx-auto max-w-md rounded-3xl border border-red-500/20 bg-zinc-950 p-5">
           <h1 className="text-xl font-bold text-red-400">Event not found</h1>
         </div>
@@ -89,13 +90,22 @@ export default async function EventDetailsPage({
     <main className="min-h-screen bg-black text-white">
       <div className="mx-auto min-h-screen max-w-md border-x border-white/10 bg-black px-4 pb-12">
         <header className="sticky top-0 z-20 border-b border-white/10 bg-black/90 backdrop-blur">
-          <div className="py-4">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">
-              Event Details
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight">
-              {event.title}
-            </h1>
+          <div className="flex items-center gap-3 py-4">
+            <Link
+              href="/"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white hover:text-black"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">
+                Event Details
+              </p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight">
+                {event.title}
+              </h1>
+            </div>
           </div>
         </header>
 
@@ -131,7 +141,7 @@ export default async function EventDetailsPage({
                       <Link
                         key={friend.id}
                         href={`/user/${friend.id}`}
-                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition"
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 transition hover:bg-white/10"
                       >
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white">
                           {friend.display_name?.[0]?.toUpperCase() ?? "?"}

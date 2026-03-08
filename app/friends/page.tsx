@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Avatar from "@/components/Avatar";
 
 async function addFriend(formData: FormData) {
   "use server";
@@ -45,6 +46,12 @@ async function addFriend(formData: FormData) {
   redirect("/friends");
 }
 
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+};
+
 export default async function FriendsPage({
   searchParams,
 }: {
@@ -69,23 +76,23 @@ export default async function FriendsPage({
 
   const friendIds = friendRows?.map((row) => row.friend_id) ?? [];
 
-  let friendsList: { id: string; display_name: string | null }[] = [];
+  let friendsList: ProfileRow[] = [];
 
   if (friendIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name")
+      .select("id, display_name, avatar_url")
       .in("id", friendIds);
 
     friendsList = profiles ?? [];
   }
 
-  let searchResults: { id: string; display_name: string | null }[] = [];
+  let searchResults: ProfileRow[] = [];
 
   if (q.trim()) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name")
+      .select("id, display_name, avatar_url")
       .ilike("display_name", `%${q}%`)
       .neq("id", user.id)
       .limit(20);
@@ -95,7 +102,7 @@ export default async function FriendsPage({
   }
 
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
+    <main className="min-h-screen bg-black px-6 py-10 text-white">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -143,7 +150,13 @@ export default async function FriendsPage({
                   key={profile.id}
                   className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
                 >
-                  <div>
+                  <div className="flex items-center gap-3">
+                    <Avatar
+                      src={profile.avatar_url}
+                      fallback={profile.display_name || "U"}
+                      size="h-10 w-10"
+                    />
+
                     <p className="font-medium">
                       {profile.display_name || "Unnamed user"}
                     </p>
@@ -176,8 +189,14 @@ export default async function FriendsPage({
               {friendsList.map((friend) => (
                 <div
                   key={friend.id}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
                 >
+                  <Avatar
+                    src={friend.avatar_url}
+                    fallback={friend.display_name || "U"}
+                    size="h-10 w-10"
+                  />
+
                   <p className="font-medium">
                     {friend.display_name || "Unnamed user"}
                   </p>

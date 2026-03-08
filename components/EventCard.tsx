@@ -1,4 +1,5 @@
 import GoingButton from "@/components/GoingButton";
+import Avatar from "@/components/Avatar";
 
 type Event = {
   id: number;
@@ -108,21 +109,12 @@ export default function EventCard({
               <div className="mt-4 flex items-center gap-3">
                 <div className="flex -space-x-2">
                   {friendIds.slice(0, 4).map((friend, index) => (
-                    <div
-                      key={`${friend.name}-${index}`}
-                      className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-zinc-950 bg-white/10 text-xs font-medium text-white"
-                      title={friend.name}
-                    >
-                      {friend.avatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={friend.avatar}
-                          alt={friend.name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        friend.name.charAt(0).toUpperCase()
-                      )}
+                    <div key={`${friend.name}-${index}`} title={friend.name}>
+                      <Avatar
+                        src={friend.avatar}
+                        fallback={friend.name}
+                        size="h-9 w-9"
+                      />
                     </div>
                   ))}
                 </div>

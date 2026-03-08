@@ -51,7 +51,6 @@ export default async function Home() {
     .select("id, display_name, avatar_url");
 
   const friendIdList = (friends ?? []).map((friend) => String(friend.friend_id));
-  const friendIds = new Set(friendIdList);
 
   const { data: friendGoingRows } = friendIdList.length
     ? await supabase
@@ -170,6 +169,15 @@ export default async function Home() {
             </div>
 
             <div className="flex items-center gap-2">
+              {currentUserId && (
+                <Link
+                  href="/profile"
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300 transition hover:bg-white hover:text-black"
+                >
+                  Profile
+                </Link>
+              )}
+
               {currentUserId && (
                 <Link
                   href="/friends"

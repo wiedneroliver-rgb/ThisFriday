@@ -27,8 +27,11 @@ export default function ProfilePhotoUpload({
     try {
       const supabase = createClient();
 
+      // Get file extension
       const fileExt = file.name.split(".").pop();
-      const filePath = `${userId}-${Date.now()}.${fileExt}`;
+
+      // One avatar per user (overwrites previous)
+      const filePath = `${userId}/avatar.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
@@ -36,22 +39,21 @@ export default function ProfilePhotoUpload({
           upsert: true,
         });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
+      // Get public URL
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-      const publicUrl = data.publicUrl;
+      // Prevent browser caching old avatar
+      const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
 
+      // Save avatar URL to profile
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
         .eq("id", userId);
 
-      if (updateError) {
-        throw updateError;
-      }
+      if (updateError) throw updateError;
 
       router.refresh();
     } catch (err) {
@@ -76,7 +78,7 @@ export default function ProfilePhotoUpload({
               className="h-full w-full object-cover"
             />
           ) : (
-            "?"
+            userId[0]?.toUpperCase()
           )}
         </div>
 

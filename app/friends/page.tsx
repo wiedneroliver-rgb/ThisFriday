@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import Avatar from "@/components/Avatar";
 
 async function addFriend(formData: FormData) {
   "use server";
@@ -52,6 +51,18 @@ type ProfileRow = {
   avatar_url: string | null;
 };
 
+type SuggestedFriend = ProfileRow & {
+  mutualCount: number;
+};
+
+function InitialAvatar({ name }: { name: string | null }) {
+  return (
+    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white">
+      {(name || "U")[0]?.toUpperCase()}
+    </div>
+  );
+}
+
 export default async function FriendsPage({
   searchParams,
 }: {
@@ -75,6 +86,7 @@ export default async function FriendsPage({
     .eq("user_id", user.id);
 
   const friendIds = friendRows?.map((row) => row.friend_id) ?? [];
+  const excludedIds = [user.id, ...friendIds];
 
   let friendsList: ProfileRow[] = [];
 
@@ -99,6 +111,43 @@ export default async function FriendsPage({
 
     searchResults =
       profiles?.filter((profile) => !friendIds.includes(profile.id)) ?? [];
+  }
+
+  let suggestedFriends: SuggestedFriend[] = [];
+
+  if (friendIds.length > 0) {
+    const { data: secondDegreeRows } = await supabase
+      .from("friends")
+      .select("user_id, friend_id")
+      .in("user_id", friendIds);
+
+    const mutualCounts = new Map<string, number>();
+
+    (secondDegreeRows ?? []).forEach((row) => {
+      const suggestedId = row.friend_id;
+
+      if (excludedIds.includes(suggestedId)) {
+        return;
+      }
+
+      mutualCounts.set(suggestedId, (mutualCounts.get(suggestedId) ?? 0) + 1);
+    });
+
+    const suggestedIds = Array.from(mutualCounts.keys());
+
+    if (suggestedIds.length > 0) {
+      const { data: suggestedProfiles } = await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url")
+        .in("id", suggestedIds);
+
+      suggestedFriends = (suggestedProfiles ?? [])
+        .map((profile) => ({
+          ...profile,
+          mutualCount: mutualCounts.get(profile.id) ?? 0,
+        }))
+        .sort((a, b) => b.mutualCount - a.mutualCount);
+    }
   }
 
   return (
@@ -137,6 +186,52 @@ export default async function FriendsPage({
         </form>
 
         <section className="mb-10">
+          <h2 className="mb-4 text-xl font-semibold">Suggested Friends</h2>
+
+          {suggestedFriends.length === 0 ? (
+            <p className="text-sm text-white/50">
+              No friend suggestions yet. Add a few friends first.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {suggestedFriends.map((profile) => (
+                <div
+                  key={profile.id}
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                >
+                    <Link
+                    href={`/user/${profile.id}`}
+                    className="flex items-center gap-3 hover:opacity-80 transition"
+                    >
+                    <InitialAvatar name={profile.display_name} />
+
+                    <div>
+                        <p className="font-medium">
+                        {profile.display_name || "Unnamed user"}
+                        </p>
+                        <p className="text-sm text-white/50">
+                        {profile.mutualCount} mutual{" "}
+                        {profile.mutualCount === 1 ? "friend" : "friends"}
+                        </p>
+                    </div>
+                    </Link>
+
+                  <form action={addFriend}>
+                    <input type="hidden" name="friend_id" value={profile.id} />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
+                    >
+                      Add Friend
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mb-10">
           <h2 className="mb-4 text-xl font-semibold">Search Results</h2>
 
           {!q.trim() ? (
@@ -151,11 +246,7 @@ export default async function FriendsPage({
                   className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
                 >
                   <div className="flex items-center gap-3">
-                    <Avatar
-                      src={profile.avatar_url}
-                      fallback={profile.display_name || "U"}
-                      size="h-10 w-10"
-                    />
+                    <InitialAvatar name={profile.display_name} />
 
                     <p className="font-medium">
                       {profile.display_name || "Unnamed user"}
@@ -187,20 +278,17 @@ export default async function FriendsPage({
           ) : (
             <div className="space-y-3">
               {friendsList.map((friend) => (
-                <div
+                <Link
                   key={friend.id}
-                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                  href={`/user/${friend.id}`}
+                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 transition hover:bg-white/10"
                 >
-                  <Avatar
-                    src={friend.avatar_url}
-                    fallback={friend.display_name || "U"}
-                    size="h-10 w-10"
-                  />
+                  <InitialAvatar name={friend.display_name} />
 
                   <p className="font-medium">
                     {friend.display_name || "Unnamed user"}
                   </p>
-                </div>
+                </Link>
               ))}
             </div>
           )}

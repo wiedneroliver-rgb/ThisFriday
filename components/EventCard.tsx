@@ -1,5 +1,5 @@
+import Link from "next/link";
 import GoingButton from "@/components/GoingButton";
-import Avatar from "@/components/Avatar";
 
 type Event = {
   id: number;
@@ -64,7 +64,13 @@ function getFriendLabel(friendIds: FriendPreview[]) {
     return `${friendIds[0].name} and ${friendIds[1].name} are going`;
   }
 
-  return `${friendIds.length} friends going`;
+  if (friendIds.length === 3) {
+    return `${friendIds[0].name}, ${friendIds[1].name}, and 1 other friend are going`;
+  }
+
+  return `${friendIds[0].name}, ${friendIds[1].name}, and ${
+    friendIds.length - 2
+  } other friends are going`;
 }
 
 export default function EventCard({
@@ -85,7 +91,7 @@ export default function EventCard({
         {formatEventDate(event.date, event.start_time)}
       </p>
 
-      <div className="mt-8">
+      <div className="mt-8 flex items-center gap-4">
         <details className="group">
           <summary className="cursor-pointer list-none text-xl text-zinc-400">
             More info{" "}
@@ -98,6 +104,13 @@ export default function EventCard({
             {event.description}
           </p>
         </details>
+
+        <Link
+          href={`/events/${event.id}`}
+          className="text-sm font-medium text-zinc-300 underline-offset-4 transition hover:text-white hover:underline"
+        >
+          View details
+        </Link>
       </div>
 
       <div className="mt-8 border-t border-white/10 pt-8">
@@ -109,12 +122,12 @@ export default function EventCard({
               <div className="mt-4 flex items-center gap-3">
                 <div className="flex -space-x-2">
                   {friendIds.slice(0, 4).map((friend, index) => (
-                    <div key={`${friend.name}-${index}`} title={friend.name}>
-                      <Avatar
-                        src={friend.avatar}
-                        fallback={friend.name}
-                        size="h-9 w-9"
-                      />
+                    <div
+                      key={`${friend.name}-${index}`}
+                      title={friend.name}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white"
+                    >
+                      {friend.name[0]?.toUpperCase()}
                     </div>
                   ))}
                 </div>

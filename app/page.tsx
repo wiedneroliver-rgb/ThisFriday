@@ -5,6 +5,7 @@ import FriendsActivityFeed, {
 } from "@/components/FriendsActivityFeed";
 import EventCard from "@/components/EventCard";
 import { createClient } from "@/lib/server";
+import { Bell } from "lucide-react";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -138,6 +139,7 @@ export default async function Home() {
 
       return {
         id: `${userId}-${row.event_id}-${row.created_at}`,
+        friendId: userId,
         friendName: friend.name ?? "Unknown",
         friendAvatar: friend.avatar ?? null,
         eventTitle: event.title ?? "Unknown event",
@@ -169,6 +171,16 @@ export default async function Home() {
             </div>
 
             <div className="flex items-center gap-2">
+              {currentUserId && (
+                <Link
+                  href="/notifications"
+                  aria-label="Notifications"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white hover:text-black"
+                >
+                  <Bell className="h-4 w-4" />
+                </Link>
+              )}
+
               {currentUserId && (
                 <Link
                   href="/profile"

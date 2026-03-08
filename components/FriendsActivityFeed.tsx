@@ -1,7 +1,8 @@
-import Avatar from "@/components/Avatar";
+import Link from "next/link";
 
 type FriendFeedItem = {
   id: string;
+  friendId: string;
   friendName: string;
   friendAvatar: string | null;
   eventTitle: string;
@@ -68,15 +69,21 @@ export default function FriendsActivityFeed({
       <div className="space-y-4">
         {items.map((item) => (
           <div key={item.id} className="flex items-center gap-3">
-            <Avatar
-              src={item.friendAvatar}
-              fallback={item.friendName}
-              size="h-9 w-9"
-            />
+            <Link
+              href={`/user/${item.friendId}`}
+              className="flex items-center gap-3 transition hover:opacity-80"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white">
+                {item.friendName[0]?.toUpperCase()}
+              </div>
+
+              <span className="font-medium text-white">
+                {item.friendName}
+              </span>
+            </Link>
 
             <p className="text-sm leading-6 text-zinc-300">
               <span className="text-zinc-500">– </span>
-              <span className="font-medium text-white">{item.friendName}</span>{" "}
               is going to{" "}
               <span className="font-medium text-white">{item.venue}</span>{" "}
               on{" "}

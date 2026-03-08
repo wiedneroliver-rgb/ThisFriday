@@ -56,23 +56,67 @@ export default function GoingButton({
 
       setGoing(false);
       onToggle?.(false);
-    } else {
-      const { error } = await supabase.from("going").insert([
-        {
-          user_id: userId,
+      setLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.from("going").insert([
+      {
+        user_id: userId,
+        event_id: eventId,
+      },
+    ]);
+
+    if (error) {
+      alert("Could not save RSVP.");
+      console.error(error);
+      setLoading(false);
+      return;
+    }
+
+    setGoing(true);
+    onToggle?.(true);
+
+    try {
+      const [{ data: friendRows }, { data: profile }, { data: event }] =
+        await Promise.all([
+          supabase.from("friends").select("user_id").eq("friend_id", userId),
+          supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("id", userId)
+            .maybeSingle(),
+          supabase
+            .from("events")
+            .select("title")
+            .eq("id", eventId)
+            .maybeSingle(),
+        ]);
+
+      const friendUserIds = (friendRows ?? []).map((row) => row.user_id);
+
+      if (friendUserIds.length > 0) {
+        const actorName = profile?.display_name || "Someone";
+        const eventTitle = event?.title || "an event";
+
+        const notifications = friendUserIds.map((friendUserId) => ({
+          user_id: friendUserId,
+          type: "friend_going",
+          actor_id: userId,
           event_id: eventId,
-        },
-      ]);
+          message: `${actorName} is going to ${eventTitle}`,
+        }));
 
-      if (error) {
-        alert("Could not save RSVP.");
-        console.error(error);
-        setLoading(false);
-        return;
+        const { error: notificationError } = await supabase
+          .from("notifications")
+          .insert(notifications);
+
+        if (notificationError) {
+          console.error("Error creating notifications:", notificationError);
+        }
       }
-
-      setGoing(true);
-      onToggle?.(true);
+    } catch (notificationCatchError) {
+      console.error("Unexpected notification error:", notificationCatchError);
     }
 
     setLoading(false);

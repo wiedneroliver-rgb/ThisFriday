@@ -190,6 +190,13 @@ export default async function Home() {
               Log in to see your friends, RSVP to events, and personalize your
               nightlife feed.
             </p>
+
+            <a
+              href="/login"
+              className="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
+            >
+              Log In
+            </a>
           </section>
         )}
 

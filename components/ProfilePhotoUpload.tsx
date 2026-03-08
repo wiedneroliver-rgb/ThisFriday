@@ -27,27 +27,19 @@ export default function ProfilePhotoUpload({
     try {
       const supabase = createClient();
 
-      // Get file extension
-      const fileExt = file.name.split(".").pop();
-
-      // One avatar per user (overwrites previous)
+      const fileExt = file.name.split(".").pop() || "png";
       const filePath = `${userId}/avatar.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, file, {
-          upsert: true,
-        });
+        .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-      // Prevent browser caching old avatar
-      const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
+      const publicUrl = data.publicUrl;
 
-      // Save avatar URL to profile
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
@@ -64,18 +56,25 @@ export default function ProfilePhotoUpload({
     }
   }
 
+  const avatarSrc = currentAvatarUrl
+    ? `${currentAvatarUrl}?v=${Date.now()}`
+    : null;
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
       <h2 className="text-lg font-semibold text-white">Profile Photo</h2>
 
       <div className="mt-4 flex items-center gap-4">
         <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white/10 text-xl text-white">
-          {currentAvatarUrl ? (
+          {avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={currentAvatarUrl}
-              alt="Profile"
+              src={avatarSrc}
+              alt=""
               className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
             />
           ) : (
             userId[0]?.toUpperCase()

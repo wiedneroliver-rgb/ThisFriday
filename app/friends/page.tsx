@@ -17,9 +17,10 @@ async function addFriend(formData: FormData) {
 
   const friendId = formData.get("friend_id") as string;
 
-  if (!friendId || friendId === user.id) return;
+  if (!friendId || friendId === user.id) {
+    redirect("/friends");
+  }
 
-  // Check if friendship already exists
   const { data: existing } = await supabase
     .from("friends")
     .select("user_id")
@@ -27,16 +28,18 @@ async function addFriend(formData: FormData) {
     .eq("friend_id", friendId)
     .maybeSingle();
 
-  if (existing) return;
+  if (existing) {
+    redirect("/friends");
+  }
 
-  // Insert both directions so friendship is mutual
-  const { error } = await supabase.from("friends").insert([
-    { user_id: user.id, friend_id: friendId },
-    { user_id: friendId, friend_id: user.id },
-  ]);
+  const { error } = await supabase.from("friends").insert({
+    user_id: user.id,
+    friend_id: friendId,
+  });
 
   if (error) {
     console.error("Error adding friend:", error);
+    throw new Error("Failed to add friend");
   }
 
   redirect("/friends");
@@ -59,7 +62,6 @@ export default async function FriendsPage({
 
   const { q = "" } = await searchParams;
 
-  // Get current user's friends
   const { data: friendRows } = await supabase
     .from("friends")
     .select("friend_id")
@@ -67,7 +69,6 @@ export default async function FriendsPage({
 
   const friendIds = friendRows?.map((row) => row.friend_id) ?? [];
 
-  // Load friend profiles
   let friendsList: { id: string; display_name: string | null }[] = [];
 
   if (friendIds.length > 0) {
@@ -79,7 +80,6 @@ export default async function FriendsPage({
     friendsList = profiles ?? [];
   }
 
-  // Search users by display name
   let searchResults: { id: string; display_name: string | null }[] = [];
 
   if (q.trim()) {
@@ -107,7 +107,7 @@ export default async function FriendsPage({
 
           <Link
             href="/"
-            className="rounded-full border border-white/20 px-4 py-2 text-sm hover:bg-white hover:text-black transition"
+            className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
           >
             Back
           </Link>
@@ -123,7 +123,7 @@ export default async function FriendsPage({
           />
           <button
             type="submit"
-            className="rounded-xl bg-white px-5 py-3 text-black font-medium hover:opacity-90 transition"
+            className="rounded-xl bg-white px-5 py-3 font-medium text-black transition hover:opacity-90"
           >
             Search
           </button>
@@ -153,7 +153,7 @@ export default async function FriendsPage({
                     <input type="hidden" name="friend_id" value={profile.id} />
                     <button
                       type="submit"
-                      className="rounded-full border border-white/20 px-4 py-2 text-sm hover:bg-white hover:text-black transition"
+                      className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
                     >
                       Add Friend
                     </button>

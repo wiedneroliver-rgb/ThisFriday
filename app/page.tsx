@@ -50,11 +50,19 @@ export default async function Home() {
     .from("profiles")
     .select("id, display_name, avatar_url");
 
-  const friendIds = new Set((friends ?? []).map((friend) => friend.friend_id));
+  const friendIdList = (friends ?? []).map((friend) => String(friend.friend_id));
+  const friendIds = new Set(friendIdList);
+
+  const { data: friendGoingRows } = friendIdList.length
+    ? await supabase
+        .from("going")
+        .select("user_id, event_id, created_at")
+        .in("user_id", friendIdList)
+    : { data: [] };
 
   const friendProfiles = new Map(
     (profiles ?? []).map((profile) => [
-      profile.id,
+      String(profile.id),
       {
         name: profile.display_name,
         avatar: profile.avatar_url,
@@ -76,20 +84,20 @@ export default async function Home() {
   const friendActivity: Record<number, { name: string; avatar: string | null }[]> =
     {};
 
-  (goingRows ?? []).forEach((row) => {
-    if (friendIds.has(row.user_id)) {
-      if (!friendActivity[row.event_id]) {
-        friendActivity[row.event_id] = [];
-      }
+  (friendGoingRows ?? []).forEach((row) => {
+    const userId = String(row.user_id);
 
-      const friend = friendProfiles.get(row.user_id);
+    if (!friendActivity[row.event_id]) {
+      friendActivity[row.event_id] = [];
+    }
 
-      if (friend) {
-        friendActivity[row.event_id].push({
-          name: friend.name ?? "Unknown",
-          avatar: friend.avatar ?? null,
-        });
-      }
+    const friend = friendProfiles.get(userId);
+
+    if (friend) {
+      friendActivity[row.event_id].push({
+        name: friend.name ?? "Unknown",
+        avatar: friend.avatar ?? null,
+      });
     }
   });
 
@@ -117,20 +125,20 @@ export default async function Home() {
 
   const userGoingEventIds = new Set(
     (goingRows ?? [])
-      .filter((row) => currentUserId && row.user_id === currentUserId)
+      .filter((row) => currentUserId && String(row.user_id) === currentUserId)
       .map((row) => row.event_id)
   );
 
-  const friendFeedItems: FriendFeedItem[] = (goingRows ?? [])
-    .filter((row) => friendIds.has(row.user_id))
+  const friendFeedItems: FriendFeedItem[] = (friendGoingRows ?? [])
     .map((row) => {
-      const friend = friendProfiles.get(row.user_id);
+      const userId = String(row.user_id);
+      const friend = friendProfiles.get(userId);
       const event = eventMap.get(row.event_id);
 
       if (!friend || !event) return null;
 
       return {
-        id: `${row.user_id}-${row.event_id}-${row.created_at}`,
+        id: `${userId}-${row.event_id}-${row.created_at}`,
         friendName: friend.name ?? "Unknown",
         friendAvatar: friend.avatar ?? null,
         eventTitle: event.title ?? "Unknown event",

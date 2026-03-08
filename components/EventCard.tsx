@@ -1,5 +1,6 @@
 import Link from "next/link";
 import GoingButton from "@/components/GoingButton";
+import UserAvatar from "@/components/UserAvatar";
 
 type Event = {
   id: number;
@@ -121,15 +122,20 @@ export default function EventCard({
             {friendIds.length > 0 && (
               <div className="mt-4 flex items-center gap-3">
                 <div className="flex -space-x-2">
-                  {friendIds.slice(0, 4).map((friend, index) => (
-                    <div
+                  {friendIds.slice(0, 3).map((friend, index) => (
+                    <UserAvatar
                       key={`${friend.name}-${index}`}
-                      title={friend.name}
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white"
-                    >
-                      {friend.name[0]?.toUpperCase()}
-                    </div>
+                      src={friend.avatar}
+                      fallback={friend.name}
+                      size="h-9 w-9"
+                    />
                   ))}
+
+                  {friendIds.length > 3 && (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-xs font-medium text-white">
+                      +{friendIds.length - 3}
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-sm text-zinc-400">

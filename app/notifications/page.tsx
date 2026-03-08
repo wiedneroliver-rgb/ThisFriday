@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/server";
+import UserAvatar from "@/components/UserAvatar";
 
 async function acceptFriendRequest(formData: FormData) {
   "use server";
@@ -113,6 +114,34 @@ async function declineFriendRequest(formData: FormData) {
   redirect("/notifications");
 }
 
+function formatTimestamp(timestamp: string) {
+  return new Date(timestamp).toLocaleString();
+}
+
+function buildNotificationText({
+  type,
+  actorName,
+  eventTitle,
+}: {
+  type: string;
+  actorName: string;
+  eventTitle?: string | null;
+}) {
+  if (type === "friend_request") {
+    return `${actorName} sent you a friend request`;
+  }
+
+  if (type === "friend_going" || type === "going_event") {
+    if (eventTitle) {
+      return `${actorName} is going to ${eventTitle}`;
+    }
+
+    return `${actorName} is going out`;
+  }
+
+  return `${actorName} sent you a notification`;
+}
+
 export default async function NotificationsPage() {
   const supabase = await createClient();
 
@@ -125,21 +154,46 @@ export default async function NotificationsPage() {
     redirect("/login");
   }
 
-    await supabase
+  await supabase
     .from("notifications")
     .update({ read: true })
     .eq("user_id", user.id)
     .eq("read", false);
 
-    const { data: notifications, error } = await supabase
+  const { data: notifications, error } = await supabase
     .from("notifications")
     .select("*")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-    if (error) {
+  if (error) {
     console.error("Error loading notifications:", error);
-    }
+  }
+
+  const actorIds = Array.from(
+    new Set((notifications ?? []).map((n) => n.actor_id).filter(Boolean))
+  );
+
+  const eventIds = Array.from(
+    new Set((notifications ?? []).map((n) => n.event_id).filter(Boolean))
+  );
+
+  const { data: actorProfiles } = actorIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url")
+        .in("id", actorIds)
+    : { data: [] };
+
+  const { data: events } = eventIds.length
+    ? await supabase.from("events").select("id, title").in("id", eventIds)
+    : { data: [] };
+
+  const actorMap = new Map(
+    (actorProfiles ?? []).map((profile) => [String(profile.id), profile])
+  );
+
+  const eventMap = new Map((events ?? []).map((event) => [event.id, event]));
 
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">
@@ -147,12 +201,12 @@ export default async function NotificationsPage() {
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-bold">Notifications</h1>
 
-            <a
+          <Link
             href="/"
             className="rounded-full border border-white/20 px-4 py-2 text-sm text-white transition hover:border-white/40 hover:bg-white/5"
-            >
+          >
             Back
-            </a>
+          </Link>
         </div>
 
         {!notifications || notifications.length === 0 ? (
@@ -161,75 +215,126 @@ export default async function NotificationsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {notifications.map((notification) =>
-              notification.type === "friend_request" ? (
-                <div
-                  key={notification.id}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-5"
-                >
-                  <p className="text-sm font-medium text-white">
-                    {notification.message}
-                  </p>
+            {notifications.map((notification) => {
+              const actor = actorMap.get(String(notification.actor_id));
+              const event = notification.event_id
+                ? eventMap.get(notification.event_id)
+                : null;
 
-                  <p className="mt-2 text-xs text-white/50">
-                    {new Date(notification.created_at).toLocaleString()}
-                  </p>
+              const actorName = actor?.display_name || "Someone";
 
-                  <div className="mt-4 flex gap-3">
-                    <form action={acceptFriendRequest}>
-                      <input
-                        type="hidden"
-                        name="notification_id"
-                        value={notification.id}
-                      />
-                      <input
-                        type="hidden"
-                        name="actor_id"
-                        value={notification.actor_id}
-                      />
-                      <button
-                        type="submit"
-                        className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
-                      >
-                        Accept
-                      </button>
-                    </form>
+              const message = buildNotificationText({
+                type: notification.type,
+                actorName,
+                eventTitle: event?.title,
+              });
 
-                    <form action={declineFriendRequest}>
-                      <input
-                        type="hidden"
-                        name="notification_id"
-                        value={notification.id}
+              if (notification.type === "friend_request") {
+                return (
+                  <div
+                    key={notification.id}
+                    className="rounded-2xl border border-white/10 bg-white/5 p-5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <UserAvatar
+                        src={actor?.avatar_url}
+                        fallback={actorName}
+                        size="h-11 w-11"
                       />
-                      <button
-                        type="submit"
-                        className="rounded-full border border-white/20 px-4 py-2 text-sm text-white transition hover:bg-white hover:text-black"
-                      >
-                        Decline
-                      </button>
-                    </form>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-white">
+                          {message}
+                        </p>
+
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                          Friend Request
+                        </p>
+
+                        <p className="mt-3 text-xs text-white/50">
+                          {formatTimestamp(notification.created_at)}
+                        </p>
+
+                        <div className="mt-4 flex gap-3">
+                          <form action={acceptFriendRequest}>
+                            <input
+                              type="hidden"
+                              name="notification_id"
+                              value={notification.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="actor_id"
+                              value={notification.actor_id}
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
+                            >
+                              Accept
+                            </button>
+                          </form>
+
+                          <form action={declineFriendRequest}>
+                            <input
+                              type="hidden"
+                              name="notification_id"
+                              value={notification.id}
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full border border-white/20 px-4 py-2 text-sm text-white transition hover:bg-white hover:text-black"
+                            >
+                              Decline
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ) : (
+                );
+              }
+
+              return (
                 <Link
                   key={notification.id}
                   href={
                     notification.event_id
-                      ? `/events/${notification.event_id}`
+                      ? `/events/${notification.event_id}?from=notifications`
                       : "/"
                   }
                   className="block rounded-2xl border border-white/10 bg-white/5 p-5 transition hover:border-white/20 hover:bg-white/10"
                 >
-                  <p className="text-sm font-medium text-white">
-                    {notification.message}
-                  </p>
+                  <div className="flex items-start gap-3">
+                    <UserAvatar
+                      src={actor?.avatar_url}
+                      fallback={actorName}
+                      size="h-11 w-11"
+                    />
 
-                  <p className="mt-2 text-xs text-white/50">
-                    {new Date(notification.created_at).toLocaleString()}
-                  </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white">
+                        {message}
+                      </p>
+
+                      {event?.title && (
+                        <p className="mt-1 text-sm text-zinc-400">
+                          Tap to view event details
+                        </p>
+                      )}
+
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                        Activity
+                      </p>
+
+                      <p className="mt-3 text-xs text-white/50">
+                        {formatTimestamp(notification.created_at)}
+                      </p>
+                    </div>
+                  </div>
                 </Link>
-              )
-            )}
+              );
+            })}
           </div>
         )}
       </div>

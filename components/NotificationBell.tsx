@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/client";
 
 export default function NotificationBell() {
   const supabase = createClient();
+  const pathname = usePathname();
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -17,7 +19,10 @@ export default function NotificationBell() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) return;
+      if (!user) {
+        if (isMounted) setCount(0);
+        return;
+      }
 
       const { count } = await supabase
         .from("notifications")
@@ -35,7 +40,7 @@ export default function NotificationBell() {
     return () => {
       isMounted = false;
     };
-  }, [supabase]);
+  }, [pathname]);
 
   return (
     <Link

@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { createClient } from "@/lib/server";
 import { ArrowLeft } from "lucide-react";
+import UserAvatar from "@/components/UserAvatar";
 
 type EventDetailsPageProps = {
   params: Promise<{
     id: string;
+  }>;
+  searchParams?: Promise<{
+    from?: string;
   }>;
 };
 
@@ -27,8 +31,10 @@ function formatEventDate(date: string, time: string) {
 
 export default async function EventDetailsPage({
   params,
+  searchParams,
 }: EventDetailsPageProps) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const eventId = Number(id);
 
   const supabase = await createClient();
@@ -82,9 +88,12 @@ export default async function EventDetailsPage({
   const { data: friendProfiles } = goingFriendIds.length
     ? await supabase
         .from("profiles")
-        .select("id, display_name")
+        .select("id, display_name, avatar_url")
         .in("id", goingFriendIds)
     : { data: [] };
+
+  const backHref =
+    resolvedSearchParams?.from === "notifications" ? "/notifications" : "/";
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -92,7 +101,7 @@ export default async function EventDetailsPage({
         <header className="sticky top-0 z-20 border-b border-white/10 bg-black/90 backdrop-blur">
           <div className="flex items-center gap-3 py-4">
             <Link
-              href="/"
+              href={backHref}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white hover:text-black"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -143,9 +152,11 @@ export default async function EventDetailsPage({
                         href={`/user/${friend.id}`}
                         className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 transition hover:bg-white/10"
                       >
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white">
-                          {friend.display_name?.[0]?.toUpperCase() ?? "?"}
-                        </div>
+                        <UserAvatar
+                          src={friend.avatar_url}
+                          fallback={friend.display_name || "Unknown"}
+                          size="h-9 w-9"
+                        />
 
                         <p className="text-sm text-zinc-200">
                           {friend.display_name || "Unknown"}

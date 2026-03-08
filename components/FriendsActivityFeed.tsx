@@ -1,4 +1,5 @@
 import Link from "next/link";
+import UserAvatar from "@/components/UserAvatar";
 
 type FriendFeedItem = {
   id: string;
@@ -67,15 +68,17 @@ export default function FriendsActivityFeed({
       </h2>
 
       <div className="space-y-4">
-        {items.map((item) => (
+        {items.slice(0, 3).map((item) => (
           <div key={item.id} className="flex items-center gap-3">
             <Link
               href={`/user/${item.friendId}`}
               className="flex items-center gap-3 transition hover:opacity-80"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white">
-                {item.friendName[0]?.toUpperCase()}
-              </div>
+              <UserAvatar
+                src={item.friendAvatar}
+                fallback={item.friendName}
+                size="h-9 w-9"
+              />
 
               <span className="font-medium text-white">
                 {item.friendName}

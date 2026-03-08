@@ -5,7 +5,7 @@ import FriendsActivityFeed, {
 } from "@/components/FriendsActivityFeed";
 import EventCard from "@/components/EventCard";
 import { createClient } from "@/lib/server";
-import { Bell } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 
 export const dynamic = "force-dynamic";
 
@@ -34,14 +34,6 @@ export default async function Home() {
   if (currentUserId && !currentProfile?.display_name) {
     redirect("/onboarding");
   }
-
-  const { count: unreadNotificationsCount } = currentUserId
-    ? await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", currentUserId)
-        .eq("read", false)
-    : { count: 0 };
 
   const { data: events, error } = await supabase
     .from("events")
@@ -164,7 +156,7 @@ export default async function Home() {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
-    .slice(0, 8);
+    .slice(0, 3);
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -181,23 +173,7 @@ export default async function Home() {
             </div>
 
             <div className="flex items-center gap-3">
-              {currentUserId && (
-                <Link
-                  href="/notifications"
-                  aria-label="Notifications"
-                  className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white hover:text-black"
-                >
-                  <Bell className="h-4 w-4" />
-
-                  {(unreadNotificationsCount ?? 0) > 0 && (
-                    <span className="absolute -right-1 -top-1 flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-semibold leading-none text-black">
-                      {(unreadNotificationsCount ?? 0) > 9
-                        ? "9+"
-                        : unreadNotificationsCount}
-                    </span>
-                  )}
-                </Link>
-              )}
+              {currentUserId && <NotificationBell />}
 
               {currentUserId && (
                 <Link

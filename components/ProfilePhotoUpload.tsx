@@ -15,6 +15,7 @@ export default function ProfilePhotoUpload({
 }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
   const router = useRouter();
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -48,6 +49,7 @@ export default function ProfilePhotoUpload({
       if (updateError) throw updateError;
 
       router.refresh();
+      window.location.reload();
     } catch (err) {
       console.error(err);
       setError("Failed to upload photo.");
@@ -56,25 +58,18 @@ export default function ProfilePhotoUpload({
     }
   }
 
-  const avatarSrc = currentAvatarUrl
-    ? `${currentAvatarUrl}?v=${Date.now()}`
-    : null;
-
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
       <h2 className="text-lg font-semibold text-white">Profile Photo</h2>
 
       <div className="mt-4 flex items-center gap-4">
         <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white/10 text-xl text-white">
-          {avatarSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
+          {currentAvatarUrl && !imageError ? (
             <img
-              src={avatarSrc}
+              src={currentAvatarUrl}
               alt=""
               className="h-full w-full object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
+              onError={() => setImageError(true)}
             />
           ) : (
             userId[0]?.toUpperCase()

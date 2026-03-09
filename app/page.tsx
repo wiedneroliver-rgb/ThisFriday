@@ -6,6 +6,7 @@ import FriendsActivityFeed, {
 import EventCard from "@/components/EventCard";
 import { createClient } from "@/lib/server";
 import NotificationBell from "@/components/NotificationBell";
+import LogoutButton from "@/components/LogoutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -287,7 +288,11 @@ export default async function Home() {
             ))}
           </div>
         </section>
-
+        {currentUserId && (
+          <section className="mt-12">
+            <LogoutButton />
+          </section>
+        )}
         {error && <p className="mt-8 text-sm text-red-400">{error.message}</p>}
       </div>
     </main>

@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/client";
 
 export default function NotificationBell() {
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const pathname = usePathname();
   const [count, setCount] = useState(0);
 
@@ -17,18 +17,29 @@ export default function NotificationBell() {
     async function loadUnreadCount() {
       const {
         data: { user },
+        error: userError,
       } = await supabase.auth.getUser();
+
+      if (userError) {
+        console.error("Error getting current user for notification bell:", userError);
+      }
 
       if (!user) {
         if (isMounted) setCount(0);
         return;
       }
 
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from("notifications")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
         .eq("read", false);
+
+      if (error) {
+        console.error("Error loading unread notification count:", error);
+        if (isMounted) setCount(0);
+        return;
+      }
 
       if (isMounted) {
         setCount(count ?? 0);
@@ -40,7 +51,7 @@ export default function NotificationBell() {
     return () => {
       isMounted = false;
     };
-  }, [pathname]);
+  }, [pathname, supabase]);
 
   return (
     <Link

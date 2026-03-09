@@ -9,6 +9,11 @@ import NotificationBell from "@/components/NotificationBell";
 
 export const dynamic = "force-dynamic";
 
+type FriendPreview = {
+  name: string;
+  avatar: string | null;
+};
+
 export default async function Home() {
   const supabase = await createClient();
 
@@ -26,21 +31,26 @@ export default async function Home() {
   const { data: currentProfile } = currentUserId
     ? await supabase
         .from("profiles")
-        .select("display_name")
+        .select("display_name, username")
         .eq("id", currentUserId)
-        .single()
+        .maybeSingle()
     : { data: null };
 
-  if (currentUserId && !currentProfile?.display_name) {
+  if (
+    currentUserId &&
+    (!currentProfile?.display_name || !currentProfile?.username)
+  ) {
     redirect("/onboarding");
   }
 
   const { data: events, error } = await supabase
     .from("events")
-    .select("*")
+    .select("id, title, venue, description, date, start_time")
     .order("date", { ascending: true });
 
-  const { data: goingRows } = await supabase.from("going").select("*");
+  const { data: goingRows } = await supabase
+    .from("going")
+    .select("user_id, event_id, created_at");
 
   const { data: friends } = currentUserId
     ? await supabase
@@ -49,11 +59,14 @@ export default async function Home() {
         .eq("user_id", currentUserId)
     : { data: [] };
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, display_name, avatar_url");
-
   const friendIdList = (friends ?? []).map((friend) => String(friend.friend_id));
+
+  const { data: friendProfilesData } = friendIdList.length
+    ? await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url")
+        .in("id", friendIdList)
+    : { data: [] };
 
   const { data: friendGoingRows } = friendIdList.length
     ? await supabase
@@ -63,7 +76,7 @@ export default async function Home() {
     : { data: [] };
 
   const friendProfiles = new Map(
-    (profiles ?? []).map((profile) => [
+    (friendProfilesData ?? []).map((profile) => [
       String(profile.id),
       {
         name: profile.display_name,
@@ -83,8 +96,7 @@ export default async function Home() {
     goingCounts[row.event_id] += 1;
   });
 
-  const friendActivity: Record<number, { name: string; avatar: string | null }[]> =
-    {};
+  const friendActivity: Record<number, FriendPreview[]> = {};
 
   (friendGoingRows ?? []).forEach((row) => {
     const userId = String(row.user_id);
@@ -234,7 +246,7 @@ export default async function Home() {
                 event={event}
                 goingCount={goingCounts[event.id] || 0}
                 initialGoing={userGoingEventIds.has(event.id)}
-                friendIds={friendActivity[event.id] || []}
+                friendPreviews={friendActivity[event.id] || []}
               />
             ))}
           </div>
@@ -252,7 +264,7 @@ export default async function Home() {
                 event={event}
                 goingCount={goingCounts[event.id] || 0}
                 initialGoing={userGoingEventIds.has(event.id)}
-                friendIds={friendActivity[event.id] || []}
+                friendPreviews={friendActivity[event.id] || []}
               />
             ))}
           </div>
@@ -270,7 +282,7 @@ export default async function Home() {
                 event={event}
                 goingCount={goingCounts[event.id] || 0}
                 initialGoing={userGoingEventIds.has(event.id)}
-                friendIds={friendActivity[event.id] || []}
+                friendPreviews={friendActivity[event.id] || []}
               />
             ))}
           </div>

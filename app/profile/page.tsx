@@ -16,9 +16,13 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, avatar_url")
+    .select("display_name, username, avatar_url")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
+
+  if (!profile?.display_name || !profile?.username) {
+    redirect("/onboarding");
+  }
 
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">
@@ -42,13 +46,18 @@ export default async function ProfilePage() {
         <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
           <p className="text-sm text-white/60">Display Name</p>
           <p className="mt-2 text-xl font-medium text-white">
-            {profile?.display_name || "Unnamed user"}
+            {profile.display_name}
+          </p>
+
+          <p className="mt-4 text-sm text-white/60">Username</p>
+          <p className="mt-2 text-lg font-medium text-white">
+            @{profile.username}
           </p>
         </div>
 
         <ProfilePhotoUpload
           userId={user.id}
-          currentAvatarUrl={profile?.avatar_url ?? null}
+          currentAvatarUrl={profile.avatar_url ?? null}
         />
       </div>
     </main>

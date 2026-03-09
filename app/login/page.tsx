@@ -6,8 +6,18 @@ import { useRouter } from "next/navigation";
 
 type Mode = "login" | "signup" | "verify";
 
+function normalizePhoneInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  const withoutCountryCode = digits.startsWith("1")
+    ? digits.slice(1)
+    : digits;
+
+  return `+1${withoutCountryCode.slice(0, 10)}`;
+}
+
 export default function LoginPage() {
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const router = useRouter();
 
   const [phone, setPhone] = useState("+1");
@@ -79,10 +89,11 @@ export default function LoginPage() {
       .from("profiles")
       .select("display_name, username")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     if (profileError) {
-      setMessage(profileError.message);
+      console.error("Profile lookup error:", profileError);
+      setMessage("Could not load your profile. Please try again.");
       setLoading(false);
       return;
     }
@@ -157,15 +168,7 @@ export default function LoginPage() {
           autoComplete="tel"
           placeholder="+12505551234"
           value={phone}
-          onChange={(e) => {
-            let value = e.target.value;
-
-            if (!value.startsWith("+1")) {
-              value = "+1";
-            }
-
-            setPhone(value);
-          }}
+          onChange={(e) => setPhone(normalizePhoneInput(e.target.value))}
           className="mt-8 w-full rounded-lg bg-zinc-900 p-4 text-white outline-none ring-1 ring-zinc-800 focus:ring-zinc-600"
           disabled={mode === "verify"}
         />

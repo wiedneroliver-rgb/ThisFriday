@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/server";
 import { ArrowLeft } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import GoingButton from "@/components/GoingButton";
 
 type EventDetailsPageProps = {
   params: Promise<{
@@ -37,6 +38,16 @@ export default async function EventDetailsPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const eventId = Number(id);
 
+  if (Number.isNaN(eventId)) {
+    return (
+      <main className="min-h-screen bg-black px-4 py-10 text-white">
+        <div className="mx-auto max-w-md rounded-3xl border border-red-500/20 bg-zinc-950 p-5">
+          <h1 className="text-xl font-bold text-red-400">Event not found</h1>
+        </div>
+      </main>
+    );
+  }
+
   const supabase = await createClient();
 
   const {
@@ -47,7 +58,7 @@ export default async function EventDetailsPage({
 
   const { data: event, error } = await supabase
     .from("events")
-    .select("*")
+    .select("id, title, venue, description, date, start_time")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -56,7 +67,7 @@ export default async function EventDetailsPage({
     .select("*", { count: "exact", head: true })
     .eq("event_id", eventId);
 
-  if (Number.isNaN(eventId) || error || !event) {
+  if (error || !event) {
     return (
       <main className="min-h-screen bg-black px-4 py-10 text-white">
         <div className="mx-auto max-w-md rounded-3xl border border-red-500/20 bg-zinc-950 p-5">
@@ -65,6 +76,15 @@ export default async function EventDetailsPage({
       </main>
     );
   }
+
+  const { data: currentUserGoing } = currentUserId
+    ? await supabase
+        .from("going")
+        .select("id")
+        .eq("user_id", currentUserId)
+        .eq("event_id", eventId)
+        .maybeSingle()
+    : { data: null };
 
   const { data: friends } = currentUserId
     ? await supabase
@@ -135,9 +155,16 @@ export default async function EventDetailsPage({
                 {event.description || "No description yet."}
               </p>
 
-              <p className="mt-8 text-lg text-zinc-400">
-                {goingCount ?? 0} people going
-              </p>
+              <div className="mt-8 flex items-center justify-between gap-4">
+                <p className="text-lg text-zinc-400">{goingCount ?? 0} people going</p>
+
+                {currentUserId && (
+                  <GoingButton
+                    eventId={event.id}
+                    initialGoing={Boolean(currentUserGoing)}
+                  />
+                )}
+              </div>
 
               <div className="mt-10 border-t border-white/10 pt-8">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">

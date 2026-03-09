@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { createClient } from "@/lib/client";
 import { useRouter } from "next/navigation";
 
@@ -9,16 +9,40 @@ type Props = {
   currentAvatarUrl: string | null;
 };
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+function getExtensionFromType(type: string) {
+  switch (type) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    default:
+      return "png";
+  }
+}
+
 export default function ProfilePhotoUpload({
   userId,
   currentAvatarUrl,
 }: Props) {
+  const [supabase] = useState(() => createClient());
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   const router = useRouter();
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -27,34 +51,54 @@ export default function ProfilePhotoUpload({
     setImageError(false);
 
     try {
-      const supabase = createClient();
+      if (!ALLOWED_TYPES.has(file.type)) {
+        throw new Error("Please upload a JPG, PNG, WEBP, or GIF image.");
+      }
 
-      const fileExt = file.name.split(".").pop() || "png";
-      const filePath = `${userId}/avatar.${fileExt}`;
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("Please upload an image under 5 MB.");
+      }
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user || user.id !== userId) {
+        throw new Error("You are not authorized to update this profile photo.");
+      }
+
+      const fileExt = getExtensionFromType(file.type);
+      const filePath = `${user.id}/avatar.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file, {
+          upsert: true,
+          contentType: file.type,
+        });
 
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
-      const publicUrl = data.publicUrl;
+      const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
 
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
-        .eq("id", userId);
+        .eq("id", user.id);
 
       if (updateError) throw updateError;
 
       router.refresh();
-      window.location.reload();
     } catch (err) {
       console.error(err);
-      setError("Failed to upload photo.");
+      setError(
+        err instanceof Error ? err.message : "Failed to upload photo."
+      );
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
   }
 
@@ -80,13 +124,17 @@ export default function ProfilePhotoUpload({
           {uploading ? "Uploading..." : "Upload Photo"}
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             onChange={handleFileChange}
             className="hidden"
             disabled={uploading}
           />
         </label>
       </div>
+
+      <p className="mt-3 text-xs text-zinc-500">
+        JPG, PNG, WEBP, or GIF. Max 5 MB.
+      </p>
 
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
     </div>

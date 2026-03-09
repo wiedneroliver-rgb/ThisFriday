@@ -6,7 +6,7 @@ type Event = {
   id: number;
   title: string;
   venue: string;
-  description: string;
+  description: string | null;
   date: string;
   start_time: string;
 };
@@ -20,7 +20,7 @@ type EventCardProps = {
   event: Event;
   goingCount: number;
   initialGoing: boolean;
-  friendIds?: FriendPreview[];
+  friendPreviews?: FriendPreview[];
 };
 
 function formatEventDate(date: string, time: string) {
@@ -56,21 +56,21 @@ function formatEventDate(date: string, time: string) {
   return `${dayLabel} • ${timeLabel}`;
 }
 
-function getFriendLabel(friendIds: FriendPreview[]) {
-  if (friendIds.length === 1) {
-    return `${friendIds[0].name} is going`;
+function getFriendLabel(friendPreviews: FriendPreview[]) {
+  if (friendPreviews.length === 1) {
+    return `${friendPreviews[0].name} is going`;
   }
 
-  if (friendIds.length === 2) {
-    return `${friendIds[0].name} and ${friendIds[1].name} are going`;
+  if (friendPreviews.length === 2) {
+    return `${friendPreviews[0].name} and ${friendPreviews[1].name} are going`;
   }
 
-  if (friendIds.length === 3) {
-    return `${friendIds[0].name}, ${friendIds[1].name}, and 1 other friend are going`;
+  if (friendPreviews.length === 3) {
+    return `${friendPreviews[0].name}, ${friendPreviews[1].name}, and 1 other friend are going`;
   }
 
-  return `${friendIds[0].name}, ${friendIds[1].name}, and ${
-    friendIds.length - 2
+  return `${friendPreviews[0].name}, ${friendPreviews[1].name}, and ${
+    friendPreviews.length - 2
   } other friends are going`;
 }
 
@@ -78,7 +78,7 @@ export default function EventCard({
   event,
   goingCount,
   initialGoing,
-  friendIds = [],
+  friendPreviews = [],
 }: EventCardProps) {
   return (
     <div className="rounded-3xl border border-white/10 bg-zinc-950 p-5">
@@ -102,7 +102,7 @@ export default function EventCard({
           </summary>
 
           <p className="mt-4 text-base leading-7 text-zinc-400">
-            {event.description}
+            {event.description || "No description yet."}
           </p>
         </details>
 
@@ -119,10 +119,10 @@ export default function EventCard({
           <div>
             <p className="text-2xl text-zinc-400">{goingCount} people going</p>
 
-            {friendIds.length > 0 && (
+            {friendPreviews.length > 0 && (
               <div className="mt-4 flex items-center gap-3">
                 <div className="flex -space-x-2">
-                  {friendIds.slice(0, 3).map((friend, index) => (
+                  {friendPreviews.slice(0, 3).map((friend, index) => (
                     <UserAvatar
                       key={`${friend.name}-${index}`}
                       src={friend.avatar}
@@ -131,15 +131,15 @@ export default function EventCard({
                     />
                   ))}
 
-                  {friendIds.length > 3 && (
+                  {friendPreviews.length > 3 && (
                     <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-xs font-medium text-white">
-                      +{friendIds.length - 3}
+                      +{friendPreviews.length - 3}
                     </div>
                   )}
                 </div>
 
                 <p className="text-sm text-zinc-400">
-                  {getFriendLabel(friendIds)}
+                  {getFriendLabel(friendPreviews)}
                 </p>
               </div>
             )}

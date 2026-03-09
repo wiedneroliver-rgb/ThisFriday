@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/client";
 import { useRouter } from "next/navigation";
 
@@ -15,11 +15,14 @@ export default function GoingButton({
   initialGoing,
   onToggle,
 }: GoingButtonProps) {
+  const [supabase] = useState(() => createClient());
   const [going, setGoing] = useState(initialGoing);
   const [loading, setLoading] = useState(false);
-
-  const supabase = createClient();
   const router = useRouter();
+
+  useEffect(() => {
+    setGoing(initialGoing);
+  }, [initialGoing]);
 
   const handleClick = async () => {
     if (loading) return;
@@ -67,7 +70,7 @@ export default function GoingButton({
       },
     ]);
 
-    if (error) {
+    if (error && error.code !== "23505") {
       alert("Could not save RSVP.");
       console.error(error);
       setLoading(false);

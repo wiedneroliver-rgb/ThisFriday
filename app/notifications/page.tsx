@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/server";
 import UserAvatar from "@/components/UserAvatar";
+import { revalidatePath } from "next/cache";
 
 async function acceptFriendRequest(formData: FormData) {
   "use server";
@@ -23,59 +24,19 @@ async function acceptFriendRequest(formData: FormData) {
     redirect("/notifications");
   }
 
-  const { data: existingRows } = await supabase
-    .from("friends")
-    .select("user_id, friend_id")
-    .or(
-      `and(user_id.eq.${user.id},friend_id.eq.${actorId}),and(user_id.eq.${actorId},friend_id.eq.${user.id})`
-    );
+  const { error } = await supabase.rpc("accept_friend_request", {
+    p_notification_id: notificationId,
+    p_actor_id: actorId,
+  });
 
-  const alreadyHasForward = (existingRows ?? []).some(
-    (row) => row.user_id === user.id && row.friend_id === actorId
-  );
-
-  const alreadyHasReverse = (existingRows ?? []).some(
-    (row) => row.user_id === actorId && row.friend_id === user.id
-  );
-
-  const rowsToInsert = [];
-
-  if (!alreadyHasForward) {
-    rowsToInsert.push({
-      user_id: user.id,
-      friend_id: actorId,
-    });
+  if (error) {
+    console.error("Error accepting friend request:", error);
+    throw new Error("Failed to accept friend request");
   }
 
-  if (!alreadyHasReverse) {
-    rowsToInsert.push({
-      user_id: actorId,
-      friend_id: user.id,
-    });
-  }
-
-  if (rowsToInsert.length > 0) {
-    const { error: insertError } = await supabase
-      .from("friends")
-      .insert(rowsToInsert);
-
-    if (insertError) {
-      console.error("Error accepting friend request:", insertError);
-      throw new Error("Failed to accept friend request");
-    }
-  }
-
-  const { error: deleteError } = await supabase
-    .from("notifications")
-    .delete()
-    .eq("id", notificationId)
-    .eq("user_id", user.id)
-    .eq("type", "friend_request");
-
-  if (deleteError) {
-    console.error("Error removing friend request notification:", deleteError);
-    throw new Error("Failed to finish friend request");
-  }
+  revalidatePath("/notifications");
+  revalidatePath("/");
+  revalidatePath("/friends");
 
   redirect("/notifications");
 }
@@ -110,6 +71,9 @@ async function declineFriendRequest(formData: FormData) {
     console.error("Error declining friend request:", error);
     throw new Error("Failed to decline friend request");
   }
+
+  revalidatePath("/notifications");
+  revalidatePath("/");
 
   redirect("/notifications");
 }

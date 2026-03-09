@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("+1");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>("signup");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -148,9 +148,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md text-center">
         <h1 className="text-4xl font-bold">
           {mode === "login"
-            ? "Login"
+            ? "Sign in"
             : mode === "signup"
-              ? "Create Account"
+              ? "Create an account"
               : "Verify Your Number"}
         </h1>
 
@@ -204,24 +204,26 @@ export default function LoginPage() {
           {loading
             ? "Loading..."
             : mode === "login"
-              ? "Login"
+              ? "Sign in"
               : mode === "signup"
                 ? "Create Account"
                 : "Verify Code"}
         </button>
 
         {mode !== "verify" ? (
-          <button
-            onClick={() => {
-              setMode(mode === "login" ? "signup" : "login");
-              setMessage("");
-            }}
-            className="mt-4 text-sm text-zinc-400 underline"
-          >
-            {mode === "login"
-              ? "Need an account? Sign up"
-              : "Already have an account? Login"}
-          </button>
+          <p className="mt-4 text-sm text-zinc-400">
+            {mode === "login" ? "Need an account? " : "Already have an account? "}
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === "login" ? "signup" : "login");
+                setMessage("");
+              }}
+              className="underline underline-offset-4 hover:text-white"
+            >
+              {mode === "login" ? "Sign up" : "Sign in"}
+            </button>
+          </p>
         ) : (
           <button
             onClick={() => {
@@ -229,7 +231,7 @@ export default function LoginPage() {
               setCode("");
               setMessage("");
             }}
-            className="mt-4 text-sm text-zinc-400 underline"
+            className="mt-4 text-sm text-zinc-400 underline underline-offset-4 hover:text-white"
           >
             Back
           </button>

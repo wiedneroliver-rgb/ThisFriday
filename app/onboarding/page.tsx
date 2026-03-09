@@ -41,13 +41,11 @@ export default function OnboardingPage() {
       return;
     }
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData.session?.user;
 
-    if (userError || !user) {
-      setMessage("You are not logged in.");
+    if (!user) {
+      setMessage("Session not found. Please log in again.");
       setLoading(false);
       return;
     }
@@ -74,11 +72,16 @@ export default function OnboardingPage() {
 
     const { error } = await supabase
       .from("profiles")
-      .update({
-        username: trimmedUsername,
-        display_name: trimmedName,
-      })
-      .eq("id", user.id);
+      .upsert(
+        {
+          id: user.id,
+          username: trimmedUsername,
+          display_name: trimmedName,
+        },
+        {
+          onConflict: "id",
+        }
+      );
 
     if (error) {
       console.error("Profile update error:", error);

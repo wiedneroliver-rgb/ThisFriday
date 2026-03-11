@@ -91,6 +91,75 @@ function InitialAvatar({ name }: { name: string | null }) {
   );
 }
 
+// Extracted shared component — used by both search results and suggested friends
+function FriendRow({
+  profile,
+  friendIdSet,
+  outgoingRequestIds,
+  incomingRequestIds,
+  mutualCount,
+}: {
+  profile: ProfileRow;
+  friendIdSet: Set<string>;
+  outgoingRequestIds: Set<string>;
+  incomingRequestIds: Set<string>;
+  mutualCount?: number;
+}) {
+  // O(1) Set lookups instead of O(n) array includes
+  const isFriend = friendIdSet.has(profile.id);
+  const isPending = outgoingRequestIds.has(profile.id);
+  const hasIncomingRequest = incomingRequestIds.has(profile.id);
+
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+      <Link
+        href={`/user/${profile.id}?from=/friends`}
+        className="flex items-center gap-3 transition hover:opacity-80"
+      >
+        <InitialAvatar name={profile.display_name} />
+
+        <div>
+          <p className="font-medium">
+            {profile.display_name || "Unnamed user"}
+          </p>
+          {mutualCount !== undefined && (
+            <p className="text-sm text-white/50">
+              {mutualCount} mutual {mutualCount === 1 ? "friend" : "friends"}
+            </p>
+          )}
+        </div>
+      </Link>
+
+      {isFriend ? (
+        <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
+          Friends
+        </div>
+      ) : hasIncomingRequest ? (
+        <Link
+          href="/notifications"
+          className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
+        >
+          Respond
+        </Link>
+      ) : isPending ? (
+        <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
+          Pending
+        </div>
+      ) : (
+        <form action={addFriend}>
+          <input type="hidden" name="friend_id" value={profile.id} />
+          <button
+            type="submit"
+            className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
+          >
+            Send Request
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 export default async function FriendsPage({
   searchParams,
 }: {
@@ -107,18 +176,41 @@ export default async function FriendsPage({
   }
 
   const { q = "" } = await searchParams;
+  const trimmedQuery = q.trim();
 
-  const [{ data: friendRows }, { data: requestRows }] = await Promise.all([
+  // --- OPTIMIZED: Run all independent queries in parallel in a single round ---
+  const [
+    { data: friendRows },
+    { data: requestRows },
+    searchResultsData,
+  ] = await Promise.all([
     supabase.from("friends").select("friend_id").eq("user_id", user.id),
+
+    // Limit request rows to prevent unbounded fetch
     supabase
       .from("notifications")
       .select("actor_id, user_id, type")
       .eq("type", "friend_request")
-      .or(`actor_id.eq.${user.id},user_id.eq.${user.id}`),
+      .or(`actor_id.eq.${user.id},user_id.eq.${user.id}`)
+      .limit(200),
+
+    // Search by both display_name and username in the same round
+    trimmedQuery
+      ? supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .or(`display_name.ilike.%${trimmedQuery}%,username.ilike.%${trimmedQuery}%`)
+          .neq("id", user.id)
+          .limit(20)
+      : Promise.resolve({ data: [] }),
   ]);
+  // --------------------------------------------------------------------------
 
   const friendIds = friendRows?.map((row) => row.friend_id) ?? [];
-  const excludedIds = [user.id, ...friendIds];
+
+  // Use a Set for O(1) lookups in render — avoids O(n) array.includes() in loops
+  const friendIdSet = new Set(friendIds);
+  const excludedIdSet = new Set([user.id, ...friendIds]);
 
   const outgoingRequestIds = new Set(
     (requestRows ?? [])
@@ -132,65 +224,57 @@ export default async function FriendsPage({
       .map((row) => row.actor_id)
   );
 
-  let friendsList: ProfileRow[] = [];
+  const searchResults: ProfileRow[] = (searchResultsData.data as ProfileRow[]) ?? [];
 
-  if (friendIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name, avatar_url")
-      .in("id", friendIds);
+  // --- OPTIMIZED: Fetch friend profiles and second-degree connections in parallel ---
+  const [friendsListData, secondDegreeData] = await Promise.all([
+    friendIds.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", friendIds)
+      : Promise.resolve({ data: [] }),
 
-    friendsList = profiles ?? [];
-  }
+    friendIds.length > 0
+      ? supabase
+          .from("friends")
+          .select("user_id, friend_id")
+          .in("user_id", friendIds)
+          .limit(500) // Prevent unbounded row fetch as friend network grows
+      : Promise.resolve({ data: [] }),
+  ]);
+  // ------------------------------------------------------------------------------
 
-  let searchResults: ProfileRow[] = [];
+  const friendsList: ProfileRow[] = (friendsListData.data as ProfileRow[]) ?? [];
 
-  if (q.trim()) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name, avatar_url")
-      .ilike("display_name", `%${q}%`)
-      .neq("id", user.id)
-      .limit(20);
+  // Build mutual friend counts in-memory
+  const mutualCounts = new Map<string, number>();
 
-    searchResults = profiles ?? [];
-  }
+  (secondDegreeData.data ?? []).forEach((row) => {
+    const suggestedId = row.friend_id;
+
+    // O(1) Set lookup instead of O(n) array includes
+    if (excludedIdSet.has(suggestedId)) return;
+
+    mutualCounts.set(suggestedId, (mutualCounts.get(suggestedId) ?? 0) + 1);
+  });
+
+  const suggestedIds = Array.from(mutualCounts.keys());
 
   let suggestedFriends: SuggestedFriend[] = [];
 
-  if (friendIds.length > 0) {
-    const { data: secondDegreeRows } = await supabase
-      .from("friends")
-      .select("user_id, friend_id")
-      .in("user_id", friendIds);
+  if (suggestedIds.length > 0) {
+    const { data: suggestedProfiles } = await supabase
+      .from("profiles")
+      .select("id, display_name, avatar_url")
+      .in("id", suggestedIds);
 
-    const mutualCounts = new Map<string, number>();
-
-    (secondDegreeRows ?? []).forEach((row) => {
-      const suggestedId = row.friend_id;
-
-      if (excludedIds.includes(suggestedId)) {
-        return;
-      }
-
-      mutualCounts.set(suggestedId, (mutualCounts.get(suggestedId) ?? 0) + 1);
-    });
-
-    const suggestedIds = Array.from(mutualCounts.keys());
-
-    if (suggestedIds.length > 0) {
-      const { data: suggestedProfiles } = await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url")
-        .in("id", suggestedIds);
-
-      suggestedFriends = (suggestedProfiles ?? [])
-        .map((profile) => ({
-          ...profile,
-          mutualCount: mutualCounts.get(profile.id) ?? 0,
-        }))
-        .sort((a, b) => b.mutualCount - a.mutualCount);
-    }
+    suggestedFriends = ((suggestedProfiles ?? []) as ProfileRow[])
+      .map((profile) => ({
+        ...profile,
+        mutualCount: mutualCounts.get(profile.id) ?? 0,
+      }))
+      .sort((a, b) => b.mutualCount - a.mutualCount);
   }
 
   return (
@@ -217,7 +301,7 @@ export default async function FriendsPage({
             type="text"
             name="q"
             defaultValue={q}
-            placeholder="Search display names..."
+            placeholder="Search by name or username..."
             className="flex-1 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/40"
           />
           <button
@@ -237,66 +321,16 @@ export default async function FriendsPage({
             </p>
           ) : (
             <div className="space-y-3">
-              {suggestedFriends.map((profile) => {
-                const isFriend = friendIds.includes(profile.id);
-                const isPending = outgoingRequestIds.has(profile.id);
-                const hasIncomingRequest = incomingRequestIds.has(profile.id);
-
-                return (
-                  <div
-                    key={profile.id}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                  >
-                    <Link
-                      href={`/user/${profile.id}?from=/friends`}
-                      className="flex items-center gap-3 transition hover:opacity-80"
-                    >
-                      <InitialAvatar name={profile.display_name} />
-
-                      <div>
-                        <p className="font-medium">
-                          {profile.display_name || "Unnamed user"}
-                        </p>
-                        <p className="text-sm text-white/50">
-                          {profile.mutualCount} mutual{" "}
-                          {profile.mutualCount === 1 ? "friend" : "friends"}
-                        </p>
-                      </div>
-                    </Link>
-
-                    {isFriend ? (
-                      <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
-                        Friends
-                      </div>
-                    ) : hasIncomingRequest ? (
-                      <Link
-                        href="/notifications"
-                        className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
-                      >
-                        Respond
-                      </Link>
-                    ) : isPending ? (
-                      <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
-                        Pending
-                      </div>
-                    ) : (
-                      <form action={addFriend}>
-                        <input
-                          type="hidden"
-                          name="friend_id"
-                          value={profile.id}
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
-                        >
-                          Send Request
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                );
-              })}
+              {suggestedFriends.map((profile) => (
+                <FriendRow
+                  key={profile.id}
+                  profile={profile}
+                  friendIdSet={friendIdSet}
+                  outgoingRequestIds={outgoingRequestIds}
+                  incomingRequestIds={incomingRequestIds}
+                  mutualCount={profile.mutualCount}
+                />
+              ))}
             </div>
           )}
         </section>
@@ -304,66 +338,21 @@ export default async function FriendsPage({
         <section className="mb-10">
           <h2 className="mb-4 text-xl font-semibold">Search Results</h2>
 
-          {!q.trim() ? (
+          {!trimmedQuery ? (
             <p className="text-sm text-white/50">Search for a friend above.</p>
           ) : searchResults.length === 0 ? (
             <p className="text-sm text-white/50">No users found.</p>
           ) : (
             <div className="space-y-3">
-              {searchResults.map((profile) => {
-                const isFriend = friendIds.includes(profile.id);
-                const isPending = outgoingRequestIds.has(profile.id);
-                const hasIncomingRequest = incomingRequestIds.has(profile.id);
-
-                return (
-                  <div
-                    key={profile.id}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                  >
-                    <Link
-                      href={`/user/${profile.id}?from=/friends`}
-                      className="flex items-center gap-3 transition hover:opacity-80"
-                    >
-                      <InitialAvatar name={profile.display_name} />
-
-                      <p className="font-medium">
-                        {profile.display_name || "Unnamed user"}
-                      </p>
-                    </Link>
-
-                    {isFriend ? (
-                      <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
-                        Friends
-                      </div>
-                    ) : hasIncomingRequest ? (
-                      <Link
-                        href="/notifications"
-                        className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
-                      >
-                        Respond
-                      </Link>
-                    ) : isPending ? (
-                      <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
-                        Pending
-                      </div>
-                    ) : (
-                      <form action={addFriend}>
-                        <input
-                          type="hidden"
-                          name="friend_id"
-                          value={profile.id}
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:bg-white hover:text-black"
-                        >
-                          Send Request
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                );
-              })}
+              {searchResults.map((profile) => (
+                <FriendRow
+                  key={profile.id}
+                  profile={profile}
+                  friendIdSet={friendIdSet}
+                  outgoingRequestIds={outgoingRequestIds}
+                  incomingRequestIds={incomingRequestIds}
+                />
+              ))}
             </div>
           )}
         </section>
@@ -373,7 +362,7 @@ export default async function FriendsPage({
 
           {friendsList.length === 0 ? (
             <p className="text-sm text-white/50">
-              You haven’t added any friends yet.
+              You haven't added any friends yet.
             </p>
           ) : (
             <div className="space-y-3">
@@ -384,7 +373,6 @@ export default async function FriendsPage({
                   className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 transition hover:bg-white/10"
                 >
                   <InitialAvatar name={friend.display_name} />
-
                   <p className="font-medium">
                     {friend.display_name || "Unnamed user"}
                   </p>

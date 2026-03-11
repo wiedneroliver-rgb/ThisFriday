@@ -12,27 +12,31 @@ export default function NotificationBell() {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
+    // Skip fetch when on the notifications page itself — it marks everything
+    // as read on load, so the count will be 0 anyway. This also prevents
+    // firing a DB query on every single page navigation.
+    if (pathname === "/notifications") {
+      setCount(0);
+      return;
+    }
+
     let isMounted = true;
 
     async function loadUnreadCount() {
+      // getSession reads from local cache — no network roundtrip
       const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (userError) {
-        console.error("Error getting current user for notification bell:", userError);
-      }
-
-      if (!user) {
+      if (!session?.user) {
         if (isMounted) setCount(0);
         return;
       }
 
       const { count, error } = await supabase
         .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", session.user.id)
         .eq("read", false);
 
       if (error) {

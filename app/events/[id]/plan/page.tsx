@@ -26,16 +26,48 @@ export default async function PlanPage({
     redirect("/login");
   }
 
-  const { data: event } = await supabase
-    .from("events")
-    .select("title")
-    .eq("id", eventId)
-    .maybeSingle();
+  // --- OPTIMIZED: All queries run in parallel in a single round ---
+  const [
+    { data: event },
+    { data: friends },
+    { data: userGoing },
+    { data: currentProfile },
+  ] = await Promise.all([
+    supabase
+      .from("events")
+      .select("title")
+      .eq("id", eventId)
+      .maybeSingle(),
 
-  const { data: friends } = await supabase
-    .from("friends")
-    .select("friend_id")
-    .eq("user_id", user.id);
+    supabase
+      .from("friends")
+      .select("friend_id")
+      .eq("user_id", user.id)
+      .limit(500),
+
+    // Guard: verify the user has actually RSVP'd before showing invite flow
+    supabase
+      .from("going")
+      .select("event_id")
+      .eq("user_id", user.id)
+      .eq("event_id", eventId)
+      .maybeSingle(),
+
+    // Fetch actor name here so InviteFriends doesn't need a DB call on send
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
+  // ----------------------------------------------------------------
+
+  // Redirect if user hasn't RSVP'd — prevents direct URL access to plan page
+  if (!userGoing) {
+    redirect(`/events/${eventId}`);
+  }
+
+  const actorName = currentProfile?.display_name || "Someone";
 
   const friendIds = (friends ?? []).map((friend) => String(friend.friend_id));
 
@@ -63,7 +95,8 @@ export default async function PlanPage({
           Invite friends to go to{" "}
           <span className="font-semibold text-white">
             {event?.title || "this event"}
-          </span>.
+          </span>
+          .
         </p>
 
         <p className="mt-1 text-sm text-zinc-500">
@@ -76,6 +109,7 @@ export default async function PlanPage({
               friends={friendProfiles}
               eventId={eventId}
               eventTitle={event?.title || "this event"}
+              actorName={actorName}
             />
           ) : (
             <p className="text-zinc-400">You have no friends to invite yet.</p>

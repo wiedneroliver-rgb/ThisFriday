@@ -4,6 +4,16 @@ import { createClient } from "@/lib/server";
 import UserAvatar from "@/components/UserAvatar";
 import { revalidatePath } from "next/cache";
 
+type Notification = {
+  id: number;
+  actor_id: string;
+  event_id: number | null;
+  type: string;
+  message: string | null;
+  created_at: string;
+  read: boolean;
+};
+
 async function acceptFriendRequest(formData: FormData) {
   "use server";
 
@@ -128,36 +138,6 @@ function formatTimestamp(timestamp: string) {
   return new Date(timestamp).toLocaleString();
 }
 
-function buildNotificationText({
-  type,
-  actorName,
-  eventTitle,
-}: {
-  type: string;
-  actorName: string;
-  eventTitle?: string | null;
-}) {
-  if (type === "friend_request") {
-    return `${actorName} sent you a friend request`;
-  }
-
-  if (type === "friend_going") {
-    if (eventTitle) {
-      return `${actorName} is going to ${eventTitle}`;
-    }
-    return `${actorName} is going out`;
-  }
-
-  if (type === "event_invite") {
-    if (eventTitle) {
-      return `${actorName} invited you to ${eventTitle}`;
-    }
-    return `${actorName} invited you to an event`;
-  }
-
-  return `${actorName} sent you a notification`;
-}
-
 export default async function NotificationsPage() {
   const supabase = await createClient();
 
@@ -176,22 +156,30 @@ export default async function NotificationsPage() {
     .eq("user_id", user.id)
     .eq("read", false);
 
+  // Explicit column select + limit to prevent unbounded growth over time
   const { data: notifications, error } = await supabase
     .from("notifications")
-    .select("*")
+    .select("id, actor_id, event_id, type, message, created_at, read")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   if (error) {
     console.error("Error loading notifications:", error);
   }
 
   const actorIds = Array.from(
-    new Set((notifications ?? []).map((n) => n.actor_id).filter(Boolean))
+    new Set(
+      (notifications ?? []).map((n: Notification) => n.actor_id).filter(Boolean)
+    )
   );
 
   const eventIds = Array.from(
-    new Set((notifications ?? []).map((n) => n.event_id).filter(Boolean))
+    new Set(
+      (notifications ?? [])
+        .map((n: Notification) => n.event_id)
+        .filter(Boolean)
+    )
   );
 
   const { data: actorProfiles } = actorIds.length
@@ -231,32 +219,19 @@ export default async function NotificationsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {notifications.map((notification: any) => {
+            {notifications.map((notification: Notification) => {
               const actor = actorMap.get(String(notification.actor_id));
               const event = notification.event_id
                 ? eventMap.get(notification.event_id)
                 : null;
 
               const actorName = actor?.display_name || "Someone";
+              const safeType = notification.type?.trim() ?? "";
 
-              const safeType =
-                typeof notification.type === "string"
-                  ? notification.type.trim()
-                  : "";
-
-              const storedMessage =
-                typeof notification.message === "string"
-                  ? notification.message.trim()
-                  : "";
-
+              // Use stored message — always present for notifications created by the app
               const message =
-                storedMessage.length > 0
-                  ? storedMessage
-                  : buildNotificationText({
-                      type: safeType,
-                      actorName,
-                      eventTitle: event?.title,
-                    });
+                notification.message?.trim() ||
+                `${actorName} sent you a notification`;
 
               if (safeType === "friend_request") {
                 return (
@@ -349,22 +324,22 @@ export default async function NotificationsPage() {
                         <div className="mt-4 flex gap-3">
                           <form action={goToEventFromNotification}>
                             <input
-                                type="hidden"
-                                name="event_id"
-                                value={notification.event_id}
+                              type="hidden"
+                              name="event_id"
+                              value={notification.event_id ?? ""}
                             />
                             <input
-                                type="hidden"
-                                name="notification_id"
-                                value={notification.id}
+                              type="hidden"
+                              name="notification_id"
+                              value={notification.id}
                             />
                             <button
-                                type="submit"
-                                className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
+                              type="submit"
+                              className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
                             >
-                                I'm Going
+                              I'm Going
                             </button>
-                            </form>
+                          </form>
 
                           <Link
                             href={`/events/${notification.event_id}`}

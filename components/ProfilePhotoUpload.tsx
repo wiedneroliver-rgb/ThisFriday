@@ -59,15 +59,16 @@ export default function ProfilePhotoUpload({
         throw new Error("Please upload an image under 5 MB.");
       }
 
+      // getSession reads from local cache — no network roundtrip
       const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (userError || !user || user.id !== userId) {
+      if (!session?.user || session.user.id !== userId) {
         throw new Error("You are not authorized to update this profile photo.");
       }
 
+      const user = session.user;
       const fileExt = getExtensionFromType(file.type);
       const filePath = `${user.id}/avatar.${fileExt}`;
 

@@ -56,16 +56,26 @@ export default async function EventDetailsPage({
 
   const currentUserId = user?.id ?? null;
 
-  const { data: event, error } = await supabase
-    .from("events")
-    .select("id, title, venue, description, date, start_time, ticket_link")
-    .eq("id", eventId)
-    .maybeSingle();
-
-  const { count: goingCount } = await supabase
-    .from("going")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", eventId);
+  // --- OPTIMIZED: Run event fetch, going count, and all going rows in parallel ---
+  const [
+    { data: event, error },
+    { count: goingCount },
+    { data: goingRows },
+  ] = await Promise.all([
+    supabase
+      .from("events")
+      .select("id, title, venue, description, date, start_time, ticket_link")
+      .eq("id", eventId)
+      .maybeSingle(),
+    supabase
+      .from("going")
+      .select("*", { count: "exact", head: true })
+      .eq("event_id", eventId),
+    currentUserId
+      ? supabase.from("going").select("user_id").eq("event_id", eventId)
+      : Promise.resolve({ data: [] }),
+  ]);
+  // -----------------------------------------------------------------------------
 
   if (error || !event) {
     return (
@@ -77,14 +87,10 @@ export default async function EventDetailsPage({
     );
   }
 
-  const { data: currentUserGoing } = currentUserId
-    ? await supabase
-        .from("going")
-        .select("id")
-        .eq("user_id", currentUserId)
-        .eq("event_id", eventId)
-        .maybeSingle()
-    : { data: null };
+  // Derive currentUserGoing from goingRows — no extra query needed
+  const currentUserGoing = (goingRows ?? []).some(
+    (row) => String(row.user_id) === currentUserId
+  );
 
   const { data: friends } = currentUserId
     ? await supabase
@@ -95,17 +101,9 @@ export default async function EventDetailsPage({
 
   const friendIdList = (friends ?? []).map((friend) => String(friend.friend_id));
 
-  const { data: friendGoingRows } = friendIdList.length
-    ? await supabase
-        .from("going")
-        .select("user_id")
-        .eq("event_id", eventId)
-        .in("user_id", friendIdList)
-    : { data: [] };
-
-  const goingFriendIds = (friendGoingRows ?? []).map((row) =>
-    String(row.user_id)
-  );
+  // Derive which friends are going in-memory — no extra query needed
+  const goingUserIds = (goingRows ?? []).map((row) => String(row.user_id));
+  const goingFriendIds = goingUserIds.filter((id) => friendIdList.includes(id));
 
   const { data: friendProfiles } = goingFriendIds.length
     ? await supabase
@@ -178,7 +176,7 @@ export default async function EventDetailsPage({
                 {currentUserId && (
                   <GoingButton
                     eventId={event.id}
-                    initialGoing={Boolean(currentUserGoing)}
+                    initialGoing={currentUserGoing}
                   />
                 )}
               </div>

@@ -49,10 +49,6 @@ export default async function Home() {
     .select("id, title, venue, description, date, start_time")
     .order("date", { ascending: true });
 
-  const { data: goingRows } = await supabase
-    .from("going")
-    .select("user_id, event_id, created_at");
-
   const { data: friends } = currentUserId
     ? await supabase
         .from("friends")
@@ -69,12 +65,23 @@ export default async function Home() {
         .in("id", friendIdList)
     : { data: [] };
 
-  const { data: friendGoingRows } = friendIdList.length
+  // --- OPTIMIZED: Single going query filtered to upcoming event IDs only ---
+  const upcomingEventIds = (events ?? []).map((e) => e.id);
+
+  const { data: goingRows } = upcomingEventIds.length
     ? await supabase
         .from("going")
         .select("user_id, event_id, created_at")
-        .in("user_id", friendIdList)
+        .in("event_id", upcomingEventIds)
     : { data: [] };
+
+  // Derive friend going rows in-memory instead of a second DB query
+  const friendGoingRows = friendIdList.length
+    ? (goingRows ?? []).filter((row) =>
+        friendIdList.includes(String(row.user_id))
+      )
+    : [];
+  // -------------------------------------------------------------------------
 
   const friendProfiles = new Map(
     (friendProfilesData ?? []).map((profile) => [
@@ -99,7 +106,7 @@ export default async function Home() {
 
   const friendActivity: Record<number, FriendPreview[]> = {};
 
-  (friendGoingRows ?? []).forEach((row) => {
+  friendGoingRows.forEach((row) => {
     const userId = String(row.user_id);
 
     if (!friendActivity[row.event_id]) {
@@ -144,7 +151,7 @@ export default async function Home() {
       .map((row) => row.event_id)
   );
 
-  const friendFeedItems: FriendFeedItem[] = (friendGoingRows ?? [])
+  const friendFeedItems: FriendFeedItem[] = friendGoingRows
     .map((row) => {
       const userId = String(row.user_id);
       const friend = friendProfiles.get(userId);
@@ -288,11 +295,13 @@ export default async function Home() {
             ))}
           </div>
         </section>
+
         {currentUserId && (
           <section className="mt-12">
             <LogoutButton />
           </section>
         )}
+
         {error && <p className="mt-8 text-sm text-red-400">{error.message}</p>}
       </div>
     </main>

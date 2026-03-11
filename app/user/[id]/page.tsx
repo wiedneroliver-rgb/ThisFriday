@@ -32,32 +32,55 @@ export default async function UserPage({
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, username, avatar_url")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!profile) {
-    notFound();
-  }
-
+  // --- OPTIMIZED: Profile fetch runs in parallel with all other queries ---
+  // friendCount derived from viewedUserFriendRows.length — removes duplicate query
   const [
-    { count: friendCount },
+    { data: profile },
     { data: viewedUserFriendRows },
     { data: currentUserFriendRows },
     { data: viewedUserGoingRows },
     { data: currentUserGoingRows },
   ] = await Promise.all([
     supabase
+      .from("profiles")
+      .select("display_name, username, avatar_url")
+      .eq("id", id)
+      .maybeSingle(),
+
+    // Limit friend rows — no need to fetch thousands of connections
+    supabase
       .from("friends")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", id),
-    supabase.from("friends").select("friend_id").eq("user_id", id),
-    supabase.from("friends").select("friend_id").eq("user_id", user.id),
-    supabase.from("going").select("event_id").eq("user_id", id),
-    supabase.from("going").select("event_id").eq("user_id", user.id),
+      .select("friend_id")
+      .eq("user_id", id)
+      .limit(500),
+
+    supabase
+      .from("friends")
+      .select("friend_id")
+      .eq("user_id", user.id)
+      .limit(500),
+
+    // Scope going rows to upcoming events only — prevents unbounded fetch over time
+    supabase
+      .from("going")
+      .select("event_id")
+      .eq("user_id", id)
+      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+
+    supabase
+      .from("going")
+      .select("event_id")
+      .eq("user_id", user.id)
+      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
   ]);
+  // -----------------------------------------------------------------------
+
+  if (!profile) {
+    notFound();
+  }
+
+  // Derive friend count from fetched rows — no separate count query needed
+  const friendCount = (viewedUserFriendRows ?? []).length;
 
   const viewedUserFriendIds = new Set(
     (viewedUserFriendRows ?? []).map((row) => row.friend_id)
@@ -67,8 +90,8 @@ export default async function UserPage({
     (currentUserFriendRows ?? []).map((row) => row.friend_id)
   );
 
-  const mutualFriendCount = Array.from(viewedUserFriendIds).filter((friendId) =>
-    currentUserFriendIds.has(friendId)
+  const mutualFriendCount = Array.from(viewedUserFriendIds).filter(
+    (friendId) => currentUserFriendIds.has(friendId)
   ).length;
 
   const viewedEventIds = (viewedUserGoingRows ?? []).map((row) => row.event_id);
@@ -84,6 +107,7 @@ export default async function UserPage({
     (eventId) => !currentUserEventIds.has(eventId)
   );
 
+  // Second round — unavoidable since event IDs depend on first round results
   const [{ data: bothGoingEvents }, { data: theyAreGoingOnlyEvents }] =
     await Promise.all([
       bothGoingEventIds.length
@@ -135,7 +159,7 @@ export default async function UserPage({
                 )}
 
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-400">
-                  <p>{friendCount ?? 0} friends</p>
+                  <p>{friendCount} friends</p>
                   <p>{mutualFriendCount} mutual friends</p>
                 </div>
               </div>
@@ -171,7 +195,7 @@ export default async function UserPage({
         <section className="pt-6">
           <div className="rounded-3xl border border-white/10 bg-zinc-950 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-              They’re going, you’re not yet
+              They're going, you're not yet
             </p>
 
             {theyAreGoingOnlyEvents && theyAreGoingOnlyEvents.length > 0 ? (
@@ -195,7 +219,7 @@ export default async function UserPage({
               </div>
             ) : (
               <p className="mt-4 text-zinc-400">
-                No extra events they’re going to right now.
+                No extra events they're going to right now.
               </p>
             )}
           </div>

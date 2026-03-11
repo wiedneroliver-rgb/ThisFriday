@@ -8,10 +8,19 @@ type UserPageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams: Promise<{
+    from?: string;
+  }>;
 };
 
-export default async function UserPage({ params }: UserPageProps) {
+export default async function UserPage({
+  params,
+  searchParams,
+}: UserPageProps) {
   const { id } = await params;
+  const { from } = await searchParams;
+  const backHref =
+    typeof from === "string" && from.startsWith("/") ? from : "/";
 
   const supabase = await createClient();
 
@@ -99,7 +108,7 @@ export default async function UserPage({ params }: UserPageProps) {
         <header className="sticky top-0 z-20 border-b border-white/10 bg-black/90 backdrop-blur">
           <div className="py-4">
             <Link
-              href="/"
+              href={backHref}
               className="inline-block text-sm text-zinc-400 transition hover:text-white"
             >
               ← Back

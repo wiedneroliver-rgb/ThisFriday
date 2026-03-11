@@ -248,7 +248,7 @@ export default async function FriendsPage({
                     className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
                   >
                     <Link
-                      href={`/user/${profile.id}`}
+                      href={`/user/${profile.id}?from=/friends`}
                       className="flex items-center gap-3 transition hover:opacity-80"
                     >
                       <InitialAvatar name={profile.display_name} />
@@ -320,13 +320,16 @@ export default async function FriendsPage({
                     key={profile.id}
                     className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
                   >
-                    <div className="flex items-center gap-3">
+                    <Link
+                      href={`/user/${profile.id}?from=/friends`}
+                      className="flex items-center gap-3 transition hover:opacity-80"
+                    >
                       <InitialAvatar name={profile.display_name} />
 
                       <p className="font-medium">
                         {profile.display_name || "Unnamed user"}
                       </p>
-                    </div>
+                    </Link>
 
                     {isFriend ? (
                       <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/50">
@@ -377,7 +380,7 @@ export default async function FriendsPage({
               {friendsList.map((friend) => (
                 <Link
                   key={friend.id}
-                  href={`/user/${friend.id}`}
+                  href={`/user/${friend.id}?from=/friends`}
                   className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 transition hover:bg-white/10"
                 >
                   <InitialAvatar name={friend.display_name} />

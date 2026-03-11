@@ -75,13 +75,52 @@ export default async function Home() {
         .in("event_id", upcomingEventIds)
     : { data: [] };
 
-  // Derive friend going rows in-memory instead of a second DB query
   const friendGoingRows = friendIdList.length
     ? (goingRows ?? []).filter((row) =>
         friendIdList.includes(String(row.user_id))
       )
     : [];
   // -------------------------------------------------------------------------
+
+  // --- YOUR SCENE: events user is hosting or has accepted ---
+  const [{ data: sceneGuestRows }, { data: hostingRows }] = currentUserId
+    ? await Promise.all([
+        supabase
+          .from("hosted_event_guests")
+          .select("hosted_event_id")
+          .eq("user_id", currentUserId)
+          .eq("status", "accepted"),
+        supabase
+          .from("hosted_events")
+          .select("id, title, location, date")
+          .eq("host_id", currentUserId)
+          .order("date", { ascending: true })
+          .limit(10),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const acceptedSceneIds = (sceneGuestRows ?? []).map(
+    (r) => r.hosted_event_id
+  );
+
+  const { data: acceptedSceneEvents } =
+    acceptedSceneIds.length > 0
+      ? await supabase
+          .from("hosted_events")
+          .select("id, title, location, date")
+          .in("id", acceptedSceneIds)
+          .order("date", { ascending: true })
+      : { data: [] };
+
+  const hostingIds = new Set((hostingRows ?? []).map((e) => e.id));
+
+  const allSceneEvents = [
+    ...(hostingRows ?? []),
+    ...(acceptedSceneEvents ?? []).filter((e) => !hostingIds.has(e.id)),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const showSceneSection = allSceneEvents.length > 0;
+  // -----------------------------------------------------------------------
 
   const friendProfiles = new Map(
     (friendProfilesData ?? []).map((profile) => [
@@ -127,7 +166,9 @@ export default async function Home() {
     (event) => (friendActivity[event.id] || []).length > 0
   );
 
-  const friendGoingEventIds = new Set(friendGoingEvents.map((event) => event.id));
+  const friendGoingEventIds = new Set(
+    friendGoingEvents.map((event) => event.id)
+  );
 
   const trendingEvents = (events ?? [])
     .filter((event) => !friendGoingEventIds.has(event.id))
@@ -241,6 +282,77 @@ export default async function Home() {
         <section className="mt-8">
           <FriendsActivityFeed items={friendFeedItems} />
         </section>
+
+        {/* YOUR SCENE — only shown when user has hosted or accepted events */}
+        {showSceneSection && (
+          <section className="mt-10">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                Your Scene
+              </h2>
+              <Link
+                href="/scene/create"
+                className="text-xs text-white/40 transition hover:text-white"
+              >
+                + New Event
+              </Link>
+            </div>
+
+            <div className="space-y-3">
+              {allSceneEvents.map((event) => {
+                const isHosting = hostingIds.has(event.id);
+                const eventDate = new Date(event.date);
+                const formatted = eventDate.toLocaleDateString("en-CA", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                });
+                const formattedTime = eventDate.toLocaleTimeString("en-CA", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                });
+
+                return (
+                  <Link
+                    key={event.id}
+                    href={`/scene/${event.id}`}
+                    className="block rounded-2xl border border-white/10 bg-white/5 px-4 py-4 transition hover:bg-white/10"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium">{event.title}</p>
+                        <p className="mt-0.5 text-sm text-white/50">
+                          {event.location}
+                        </p>
+                        <p className="mt-0.5 text-xs text-white/30">
+                          {formatted} at {formattedTime}
+                        </p>
+                      </div>
+                      {isHosting && (
+                        <span className="rounded-full border border-white/20 px-2.5 py-1 text-xs text-white/50">
+                          Hosting
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Host an Event CTA — always visible but subtle, below scene section */}
+        {currentUserId && (
+          <section className="mt-4">
+            <Link
+              href="/scene/create"
+              className="flex w-full items-center justify-center rounded-2xl border border-dashed border-white/10 py-3 text-sm text-white/30 transition hover:border-white/20 hover:text-white/50"
+            >
+              + Host an Event
+            </Link>
+          </section>
+        )}
 
         <section className="mt-10">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">

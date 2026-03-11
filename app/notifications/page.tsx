@@ -8,6 +8,7 @@ type Notification = {
   id: number;
   actor_id: string;
   event_id: number | null;
+  scene_id: string | null;
   type: string;
   message: string | null;
   created_at: string;
@@ -159,7 +160,7 @@ export default async function NotificationsPage() {
   // Explicit column select + limit to prevent unbounded growth over time
   const { data: notifications, error } = await supabase
     .from("notifications")
-    .select("id, actor_id, event_id, type, message, created_at, read")
+    .select("id, actor_id, event_id, scene_id, type, message, created_at, read")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -353,7 +354,41 @@ export default async function NotificationsPage() {
                   </div>
                 );
               }
+              if (safeType === "scene_invite") {
+                return (
+                  <div
+                    key={notification.id}
+                    className="rounded-2xl border border-white/10 bg-white/5 p-5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <UserAvatar
+                        src={actor?.avatar_url}
+                        fallback={actorName}
+                        size="h-11 w-11"
+                      />
 
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-white">
+                          {message}
+                        </p>
+
+                        <p className="mt-3 text-xs text-white/50">
+                          {formatTimestamp(notification.created_at)}
+                        </p>
+
+                        <div className="mt-4 flex gap-3">
+                          <Link
+                            href={`/scene/${notification.scene_id}`}
+                            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
+                          >
+                            View Invite
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <Link
                   key={notification.id}

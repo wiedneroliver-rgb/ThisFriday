@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import UserAvatar from "@/components/UserAvatar";
 import GoingButton from "@/components/GoingButton";
+import { revalidatePath } from "next/cache";
 
 type UserPageProps = {
   params: Promise<{
@@ -12,6 +13,44 @@ type UserPageProps = {
     from?: string;
   }>;
 };
+
+async function removeFriend(formData: FormData) {
+  "use server";
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const friendId = formData.get("friend_id") as string;
+
+  if (!friendId || friendId === user.id) {
+    redirect("/");
+  }
+
+  // Delete both directions of the friendship
+  await Promise.all([
+    supabase
+      .from("friends")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("friend_id", friendId),
+    supabase
+      .from("friends")
+      .delete()
+      .eq("user_id", friendId)
+      .eq("friend_id", user.id),
+  ]);
+
+  revalidatePath("/friends");
+  revalidatePath("/");
+  redirect("/friends");
+}
 
 export default async function UserPage({
   params,
@@ -33,7 +72,6 @@ export default async function UserPage({
   }
 
   // --- OPTIMIZED: Profile fetch runs in parallel with all other queries ---
-  // friendCount derived from viewedUserFriendRows.length — removes duplicate query
   const [
     { data: profile },
     { data: viewedUserFriendRows },
@@ -47,7 +85,6 @@ export default async function UserPage({
       .eq("id", id)
       .maybeSingle(),
 
-    // Limit friend rows — no need to fetch thousands of connections
     supabase
       .from("friends")
       .select("friend_id")
@@ -60,7 +97,6 @@ export default async function UserPage({
       .eq("user_id", user.id)
       .limit(500),
 
-    // Scope going rows to upcoming events only — prevents unbounded fetch over time
     supabase
       .from("going")
       .select("event_id")
@@ -79,7 +115,6 @@ export default async function UserPage({
     notFound();
   }
 
-  // Derive friend count from fetched rows — no separate count query needed
   const friendCount = (viewedUserFriendRows ?? []).length;
 
   const viewedUserFriendIds = new Set(
@@ -89,6 +124,9 @@ export default async function UserPage({
   const currentUserFriendIds = new Set(
     (currentUserFriendRows ?? []).map((row) => row.friend_id)
   );
+
+  // Check if this person is already a friend
+  const isFriend = currentUserFriendIds.has(id);
 
   const mutualFriendCount = Array.from(viewedUserFriendIds).filter(
     (friendId) => currentUserFriendIds.has(friendId)
@@ -107,7 +145,6 @@ export default async function UserPage({
     (eventId) => !currentUserEventIds.has(eventId)
   );
 
-  // Second round — unavoidable since event IDs depend on first round results
   const [{ data: bothGoingEvents }, { data: theyAreGoingOnlyEvents }] =
     await Promise.all([
       bothGoingEventIds.length
@@ -145,7 +182,7 @@ export default async function UserPage({
                 size="h-16 w-16"
               />
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">
                   Profile
                 </p>
@@ -162,6 +199,19 @@ export default async function UserPage({
                   <p>{friendCount} friends</p>
                   <p>{mutualFriendCount} mutual friends</p>
                 </div>
+
+                {/* Remove friend button — only shown if already friends */}
+                {isFriend && (
+                  <form action={removeFriend} className="mt-3">
+                    <input type="hidden" name="friend_id" value={id} />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-red-500/30 px-4 py-1.5 text-xs text-red-400 transition hover:border-red-500 hover:bg-red-500/10"
+                    >
+                      Remove Friend
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
           </div>

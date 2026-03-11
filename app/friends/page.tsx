@@ -91,25 +91,29 @@ function InitialAvatar({ name }: { name: string | null }) {
   );
 }
 
-// addFriend passed as explicit prop to ensure correct server action binding
 function FriendRow({
   profile,
-  friendIdSet,
-  outgoingRequestIds,
-  incomingRequestIds,
+  friendIds,
+  outgoingIds,
+  incomingIds,
   mutualCount,
   onAddFriend,
 }: {
   profile: ProfileRow;
-  friendIdSet: Set<string>;
-  outgoingRequestIds: Set<string>;
-  incomingRequestIds: Set<string>;
+  friendIds: string[];
+  outgoingIds: string[];
+  incomingIds: string[];
   mutualCount?: number;
   onAddFriend: (formData: FormData) => Promise<void>;
 }) {
+  // Convert to Sets inside the component for O(1) lookups
+  const friendIdSet = new Set(friendIds);
+  const outgoingSet = new Set(outgoingIds);
+  const incomingSet = new Set(incomingIds);
+
   const isFriend = friendIdSet.has(profile.id);
-  const isPending = outgoingRequestIds.has(profile.id);
-  const hasIncomingRequest = incomingRequestIds.has(profile.id);
+  const isPending = outgoingSet.has(profile.id);
+  const hasIncomingRequest = incomingSet.has(profile.id);
 
   return (
     <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
@@ -179,47 +183,53 @@ export default async function FriendsPage({
   const { q = "" } = await searchParams;
   const trimmedQuery = q.trim();
 
-  // --- OPTIMIZED: Run all independent queries in parallel in a single round ---
-  const [{ data: friendRows }, { data: requestRows }, searchResultsData] =
-    await Promise.all([
-      supabase.from("friends").select("friend_id").eq("user_id", user.id),
+  // --- OPTIMIZED: Run all independent queries in parallel ---
+  // Incoming and outgoing requests are queried separately to work around RLS.
+  // RLS only allows reading notifications where user_id = current user,
+  // so outgoing requests (where actor_id = current user) need their own query.
+  const [
+    { data: friendRows },
+    { data: incomingRequestRows },
+    { data: outgoingRequestRows },
+    searchResultsData,
+  ] = await Promise.all([
+    supabase.from("friends").select("friend_id").eq("user_id", user.id),
 
-      supabase
-        .from("notifications")
-        .select("actor_id, user_id, type")
-        .eq("type", "friend_request")
-        .or(`actor_id.eq.${user.id},user_id.eq.${user.id}`)
-        .limit(200),
+    // Incoming: rows where someone sent YOU a request — RLS allows this
+    supabase
+      .from("notifications")
+      .select("actor_id")
+      .eq("type", "friend_request")
+      .eq("user_id", user.id)
+      .limit(200),
 
-      trimmedQuery
-        ? supabase
-            .from("profiles")
-            .select("id, display_name, avatar_url")
-            .or(
-              `display_name.ilike.%${trimmedQuery}%,username.ilike.%${trimmedQuery}%`
-            )
-            .neq("id", user.id)
-            .limit(20)
-        : Promise.resolve({ data: [] }),
-    ]);
-  // --------------------------------------------------------------------------
+    // Outgoing: rows YOU sent — scoped to actor_id so RLS allows this
+    supabase
+      .from("notifications")
+      .select("user_id")
+      .eq("type", "friend_request")
+      .eq("actor_id", user.id)
+      .limit(200),
+
+    trimmedQuery
+      ? supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .or(
+            `display_name.ilike.%${trimmedQuery}%,username.ilike.%${trimmedQuery}%`
+          )
+          .neq("id", user.id)
+          .limit(20)
+      : Promise.resolve({ data: [] }),
+  ]);
+  // ----------------------------------------------------------
 
   const friendIds = friendRows?.map((row) => row.friend_id) ?? [];
-
-  const friendIdSet = new Set(friendIds);
   const excludedIdSet = new Set([user.id, ...friendIds]);
 
-  const outgoingRequestIds = new Set(
-    (requestRows ?? [])
-      .filter((row) => row.actor_id === user.id)
-      .map((row) => row.user_id)
-  );
-
-  const incomingRequestIds = new Set(
-    (requestRows ?? [])
-      .filter((row) => row.user_id === user.id)
-      .map((row) => row.actor_id)
-  );
+  // Plain arrays for passing as props
+  const incomingIds = (incomingRequestRows ?? []).map((row) => row.actor_id);
+  const outgoingIds = (outgoingRequestRows ?? []).map((row) => row.user_id);
 
   const searchResults: ProfileRow[] =
     (searchResultsData.data as ProfileRow[]) ?? [];
@@ -319,9 +329,9 @@ export default async function FriendsPage({
                 <FriendRow
                   key={profile.id}
                   profile={profile}
-                  friendIdSet={friendIdSet}
-                  outgoingRequestIds={outgoingRequestIds}
-                  incomingRequestIds={incomingRequestIds}
+                  friendIds={friendIds}
+                  outgoingIds={outgoingIds}
+                  incomingIds={incomingIds}
                   mutualCount={profile.mutualCount}
                   onAddFriend={addFriend}
                 />
@@ -343,9 +353,9 @@ export default async function FriendsPage({
                 <FriendRow
                   key={profile.id}
                   profile={profile}
-                  friendIdSet={friendIdSet}
-                  outgoingRequestIds={outgoingRequestIds}
-                  incomingRequestIds={incomingRequestIds}
+                  friendIds={friendIds}
+                  outgoingIds={outgoingIds}
+                  incomingIds={incomingIds}
                   onAddFriend={addFriend}
                 />
               ))}

@@ -91,21 +91,22 @@ function InitialAvatar({ name }: { name: string | null }) {
   );
 }
 
-// Extracted shared component — used by both search results and suggested friends
+// addFriend passed as explicit prop to ensure correct server action binding
 function FriendRow({
   profile,
   friendIdSet,
   outgoingRequestIds,
   incomingRequestIds,
   mutualCount,
+  onAddFriend,
 }: {
   profile: ProfileRow;
   friendIdSet: Set<string>;
   outgoingRequestIds: Set<string>;
   incomingRequestIds: Set<string>;
   mutualCount?: number;
+  onAddFriend: (formData: FormData) => Promise<void>;
 }) {
-  // O(1) Set lookups instead of O(n) array includes
   const isFriend = friendIdSet.has(profile.id);
   const isPending = outgoingRequestIds.has(profile.id);
   const hasIncomingRequest = incomingRequestIds.has(profile.id);
@@ -146,7 +147,7 @@ function FriendRow({
           Pending
         </div>
       ) : (
-        <form action={addFriend}>
+        <form action={onAddFriend}>
           <input type="hidden" name="friend_id" value={profile.id} />
           <button
             type="submit"
@@ -179,36 +180,32 @@ export default async function FriendsPage({
   const trimmedQuery = q.trim();
 
   // --- OPTIMIZED: Run all independent queries in parallel in a single round ---
-  const [
-    { data: friendRows },
-    { data: requestRows },
-    searchResultsData,
-  ] = await Promise.all([
-    supabase.from("friends").select("friend_id").eq("user_id", user.id),
+  const [{ data: friendRows }, { data: requestRows }, searchResultsData] =
+    await Promise.all([
+      supabase.from("friends").select("friend_id").eq("user_id", user.id),
 
-    // Limit request rows to prevent unbounded fetch
-    supabase
-      .from("notifications")
-      .select("actor_id, user_id, type")
-      .eq("type", "friend_request")
-      .or(`actor_id.eq.${user.id},user_id.eq.${user.id}`)
-      .limit(200),
+      supabase
+        .from("notifications")
+        .select("actor_id, user_id, type")
+        .eq("type", "friend_request")
+        .or(`actor_id.eq.${user.id},user_id.eq.${user.id}`)
+        .limit(200),
 
-    // Search by both display_name and username in the same round
-    trimmedQuery
-      ? supabase
-          .from("profiles")
-          .select("id, display_name, avatar_url")
-          .or(`display_name.ilike.%${trimmedQuery}%,username.ilike.%${trimmedQuery}%`)
-          .neq("id", user.id)
-          .limit(20)
-      : Promise.resolve({ data: [] }),
-  ]);
+      trimmedQuery
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, avatar_url")
+            .or(
+              `display_name.ilike.%${trimmedQuery}%,username.ilike.%${trimmedQuery}%`
+            )
+            .neq("id", user.id)
+            .limit(20)
+        : Promise.resolve({ data: [] }),
+    ]);
   // --------------------------------------------------------------------------
 
   const friendIds = friendRows?.map((row) => row.friend_id) ?? [];
 
-  // Use a Set for O(1) lookups in render — avoids O(n) array.includes() in loops
   const friendIdSet = new Set(friendIds);
   const excludedIdSet = new Set([user.id, ...friendIds]);
 
@@ -224,7 +221,8 @@ export default async function FriendsPage({
       .map((row) => row.actor_id)
   );
 
-  const searchResults: ProfileRow[] = (searchResultsData.data as ProfileRow[]) ?? [];
+  const searchResults: ProfileRow[] =
+    (searchResultsData.data as ProfileRow[]) ?? [];
 
   // --- OPTIMIZED: Fetch friend profiles and second-degree connections in parallel ---
   const [friendsListData, secondDegreeData] = await Promise.all([
@@ -240,27 +238,23 @@ export default async function FriendsPage({
           .from("friends")
           .select("user_id, friend_id")
           .in("user_id", friendIds)
-          .limit(500) // Prevent unbounded row fetch as friend network grows
+          .limit(500)
       : Promise.resolve({ data: [] }),
   ]);
   // ------------------------------------------------------------------------------
 
-  const friendsList: ProfileRow[] = (friendsListData.data as ProfileRow[]) ?? [];
+  const friendsList: ProfileRow[] =
+    (friendsListData.data as ProfileRow[]) ?? [];
 
-  // Build mutual friend counts in-memory
   const mutualCounts = new Map<string, number>();
 
   (secondDegreeData.data ?? []).forEach((row) => {
     const suggestedId = row.friend_id;
-
-    // O(1) Set lookup instead of O(n) array includes
     if (excludedIdSet.has(suggestedId)) return;
-
     mutualCounts.set(suggestedId, (mutualCounts.get(suggestedId) ?? 0) + 1);
   });
 
   const suggestedIds = Array.from(mutualCounts.keys());
-
   let suggestedFriends: SuggestedFriend[] = [];
 
   if (suggestedIds.length > 0) {
@@ -329,6 +323,7 @@ export default async function FriendsPage({
                   outgoingRequestIds={outgoingRequestIds}
                   incomingRequestIds={incomingRequestIds}
                   mutualCount={profile.mutualCount}
+                  onAddFriend={addFriend}
                 />
               ))}
             </div>
@@ -351,6 +346,7 @@ export default async function FriendsPage({
                   friendIdSet={friendIdSet}
                   outgoingRequestIds={outgoingRequestIds}
                   incomingRequestIds={incomingRequestIds}
+                  onAddFriend={addFriend}
                 />
               ))}
             </div>

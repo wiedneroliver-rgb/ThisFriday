@@ -78,6 +78,42 @@ async function declineFriendRequest(formData: FormData) {
   redirect("/notifications");
 }
 
+async function goToEventFromNotification(formData: FormData) {
+  "use server";
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const eventId = Number(formData.get("event_id"));
+
+  if (!eventId) {
+    redirect("/notifications");
+  }
+
+  const { error } = await supabase.from("going").insert({
+    user_id: user.id,
+    event_id: eventId,
+  });
+
+  if (error && error.code !== "23505") {
+    console.error("Error RSVP'ing from notification:", error);
+    throw new Error("Failed to RSVP to event");
+  }
+
+  revalidatePath("/notifications");
+  revalidatePath("/");
+  revalidatePath(`/events/${eventId}`);
+
+  redirect(`/events/${eventId}`);
+}
+
 function formatTimestamp(timestamp: string) {
   return new Date(timestamp).toLocaleString();
 }
@@ -301,12 +337,19 @@ export default async function NotificationsPage() {
                         </p>
 
                         <div className="mt-4 flex gap-3">
-                          <Link
-                            href={`/events/${notification.event_id}`}
-                            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
-                          >
-                            I'm Going
-                          </Link>
+                          <form action={goToEventFromNotification}>
+                            <input
+                              type="hidden"
+                              name="event_id"
+                              value={notification.event_id}
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
+                            >
+                              I'm Going
+                            </button>
+                          </form>
 
                           <Link
                             href={`/events/${notification.event_id}`}

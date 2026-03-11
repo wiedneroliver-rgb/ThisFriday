@@ -21,27 +21,30 @@ async function addFriend(formData: FormData) {
     redirect("/friends");
   }
 
-  const [{ data: existingFriendRows }, { data: existingRequest }, { data: senderProfile }] =
-    await Promise.all([
-      supabase
-        .from("friends")
-        .select("user_id, friend_id")
-        .or(
-          `and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`
-        ),
-      supabase
-        .from("notifications")
-        .select("id")
-        .eq("type", "friend_request")
-        .eq("actor_id", user.id)
-        .eq("user_id", friendId)
-        .maybeSingle(),
-      supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user.id)
-        .maybeSingle(),
-    ]);
+  const [
+    { data: existingFriendRows },
+    { data: existingRequest },
+    { data: senderProfile },
+  ] = await Promise.all([
+    supabase
+      .from("friends")
+      .select("user_id, friend_id")
+      .or(
+        `and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`
+      ),
+    supabase
+      .from("notifications")
+      .select("id")
+      .eq("type", "friend_request")
+      .eq("actor_id", user.id)
+      .eq("user_id", friendId)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("display_name, username")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
 
   const alreadyFriends = (existingFriendRows ?? []).length > 0;
 
@@ -49,7 +52,10 @@ async function addFriend(formData: FormData) {
     redirect("/friends");
   }
 
-  const senderName = senderProfile?.display_name || "Someone";
+  const senderName =
+    senderProfile?.display_name?.trim() ||
+    senderProfile?.username?.trim() ||
+    "Someone";
 
   const { error } = await supabase.from("notifications").insert({
     user_id: friendId,

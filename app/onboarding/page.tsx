@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { createClient } from "@/lib/client";
 import { useRouter } from "next/navigation";
+import ProfilePhotoUpload from "@/components/ProfilePhotoUpload";
 
 export default function OnboardingPage() {
   const supabase = createClient();
@@ -12,6 +13,8 @@ export default function OnboardingPage() {
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [savedProfile, setSavedProfile] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -90,8 +93,42 @@ export default function OnboardingPage() {
       return;
     }
 
-    router.push("/");
-    router.refresh();
+    setUserId(user.id);
+    setSavedProfile(true);
+    setLoading(false);
+  }
+
+  if (savedProfile && userId) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
+        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-8">
+          <h1 className="text-center text-4xl font-bold">Add a profile photo</h1>
+
+          <p className="mt-4 text-center text-zinc-400">
+            Profiles with photos feel more real and are easier for friends to recognize.
+          </p>
+
+          <div className="mt-8">
+            <ProfilePhotoUpload userId={userId} currentAvatarUrl={null} />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              router.push("/");
+              router.refresh();
+            }}
+            className="mt-6 w-full rounded-lg bg-white py-3 font-semibold text-black"
+          >
+            Finish
+          </button>
+
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            You can skip this for now and add one later from your profile.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   return (

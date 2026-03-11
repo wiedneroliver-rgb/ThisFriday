@@ -58,7 +58,7 @@ export default async function EventDetailsPage({
 
   const { data: event, error } = await supabase
     .from("events")
-    .select("id, title, venue, description, date, start_time")
+    .select("id, title, venue, description, date, start_time, ticket_link")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -103,7 +103,9 @@ export default async function EventDetailsPage({
         .in("user_id", friendIdList)
     : { data: [] };
 
-  const goingFriendIds = (friendGoingRows ?? []).map((row) => String(row.user_id));
+  const goingFriendIds = (friendGoingRows ?? []).map((row) =>
+    String(row.user_id)
+  );
 
   const { data: friendProfiles } = goingFriendIds.length
     ? await supabase
@@ -155,8 +157,23 @@ export default async function EventDetailsPage({
                 {event.description || "No description yet."}
               </p>
 
+              {event.ticket_link && (
+                <div className="mt-6">
+                  <a
+                    href={event.ticket_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+                  >
+                    Get Tickets
+                  </a>
+                </div>
+              )}
+
               <div className="mt-8 flex items-center justify-between gap-4">
-                <p className="text-lg text-zinc-400">{goingCount ?? 0} people going</p>
+                <p className="text-lg text-zinc-400">
+                  {goingCount ?? 0} people going
+                </p>
 
                 {currentUserId && (
                   <GoingButton
@@ -165,6 +182,23 @@ export default async function EventDetailsPage({
                   />
                 )}
               </div>
+
+              {currentUserId && currentUserGoing && (
+                <div className="mt-4">
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/events/${event.id}/plan`}
+                      className="inline-flex rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-black"
+                    >
+                      Make a Plan
+                    </Link>
+
+                    <span className="text-sm text-zinc-400 flex items-center gap-1">
+                      ← invite your friends
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-10 border-t border-white/10 pt-8">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">

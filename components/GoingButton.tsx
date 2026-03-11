@@ -60,6 +60,9 @@ export default function GoingButton({
       setGoing(false);
       onToggle?.(false);
       setLoading(false);
+
+      router.refresh();
+
       return;
     }
 
@@ -123,6 +126,8 @@ export default function GoingButton({
     }
 
     setLoading(false);
+
+    router.refresh();
   };
 
   return (

@@ -95,12 +95,18 @@ function buildNotificationText({
     return `${actorName} sent you a friend request`;
   }
 
-  if (type === "friend_going" || type === "going_event") {
+  if (type === "friend_going") {
     if (eventTitle) {
       return `${actorName} is going to ${eventTitle}`;
     }
-
     return `${actorName} is going out`;
+  }
+
+  if (type === "event_invite") {
+    if (eventTitle) {
+      return `${actorName} invited you to ${eventTitle}`;
+    }
+    return `${actorName} invited you to an event`;
   }
 
   return `${actorName} sent you a notification`;
@@ -179,7 +185,7 @@ export default async function NotificationsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {notifications.map((notification) => {
+            {notifications.map((notification: any) => {
               const actor = actorMap.get(String(notification.actor_id));
               const event = notification.event_id
                 ? eventMap.get(notification.event_id)
@@ -187,13 +193,26 @@ export default async function NotificationsPage() {
 
               const actorName = actor?.display_name || "Someone";
 
-              const message = buildNotificationText({
-                type: notification.type,
-                actorName,
-                eventTitle: event?.title,
-              });
+              const safeType =
+                typeof notification.type === "string"
+                  ? notification.type.trim()
+                  : "";
 
-              if (notification.type === "friend_request") {
+              const storedMessage =
+                typeof notification.message === "string"
+                  ? notification.message.trim()
+                  : "";
+
+              const message =
+                storedMessage.length > 0
+                  ? storedMessage
+                  : buildNotificationText({
+                      type: safeType,
+                      actorName,
+                      eventTitle: event?.title,
+                    });
+
+              if (safeType === "friend_request") {
                 return (
                   <div
                     key={notification.id}
@@ -252,6 +271,49 @@ export default async function NotificationsPage() {
                               Decline
                             </button>
                           </form>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (safeType === "event_invite") {
+                return (
+                  <div
+                    key={notification.id}
+                    className="rounded-2xl border border-white/10 bg-white/5 p-5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <UserAvatar
+                        src={actor?.avatar_url}
+                        fallback={actorName}
+                        size="h-11 w-11"
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-white">
+                          {message}
+                        </p>
+
+                        <p className="mt-3 text-xs text-white/50">
+                          {formatTimestamp(notification.created_at)}
+                        </p>
+
+                        <div className="mt-4 flex gap-3">
+                          <Link
+                            href={`/events/${notification.event_id}`}
+                            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
+                          >
+                            I'm Going
+                          </Link>
+
+                          <Link
+                            href={`/events/${notification.event_id}`}
+                            className="rounded-full border border-white/20 px-4 py-2 text-sm text-white transition hover:bg-white hover:text-black"
+                          >
+                            View Event
+                          </Link>
                         </div>
                       </div>
                     </div>

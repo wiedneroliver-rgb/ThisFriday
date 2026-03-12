@@ -4,6 +4,7 @@ import FriendsActivityFeed, {
   type FriendFeedItem,
 } from "@/components/FriendsActivityFeed";
 import EventCard from "@/components/EventCard";
+import SceneCard from "@/components/SceneCard";
 import { createClient } from "@/lib/server";
 import NotificationBell from "@/components/NotificationBell";
 import LogoutButton from "@/components/LogoutButton";
@@ -13,6 +14,19 @@ export const dynamic = "force-dynamic";
 type FriendPreview = {
   name: string;
   avatar: string | null;
+};
+
+type SceneGuestRow = {
+  hosted_event_id: string;
+  user_id: string;
+  status: string;
+};
+
+type SceneEvent = {
+  id: string;
+  title: string;
+  location: string;
+  date: string;
 };
 
 export default async function Home() {
@@ -65,7 +79,6 @@ export default async function Home() {
         .in("id", friendIdList)
     : { data: [] };
 
-  // --- OPTIMIZED: Single going query filtered to upcoming event IDs only ---
   const upcomingEventIds = (events ?? []).map((e) => e.id);
 
   const { data: goingRows } = upcomingEventIds.length
@@ -80,9 +93,7 @@ export default async function Home() {
         friendIdList.includes(String(row.user_id))
       )
     : [];
-  // -------------------------------------------------------------------------
 
-  // --- YOUR SCENE: events user is hosting or has accepted ---
   const [{ data: sceneGuestRows }, { data: hostingRows }] = currentUserId
     ? await Promise.all([
         supabase
@@ -99,9 +110,7 @@ export default async function Home() {
       ])
     : [{ data: [] }, { data: [] }];
 
-  const acceptedSceneIds = (sceneGuestRows ?? []).map(
-    (r) => r.hosted_event_id
-  );
+  const acceptedSceneIds = (sceneGuestRows ?? []).map((r) => r.hosted_event_id);
 
   const { data: acceptedSceneEvents } =
     acceptedSceneIds.length > 0
@@ -114,13 +123,26 @@ export default async function Home() {
 
   const hostingIds = new Set((hostingRows ?? []).map((e) => e.id));
 
-  const allSceneEvents = [
+  const allSceneEvents: SceneEvent[] = [
     ...(hostingRows ?? []),
     ...(acceptedSceneEvents ?? []).filter((e) => !hostingIds.has(e.id)),
   ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const showSceneSection = allSceneEvents.length > 0;
-  // -----------------------------------------------------------------------
+
+  const allSceneIds = allSceneEvents.map((event) => event.id);
+
+  const { data: allSceneGuestRows } = allSceneIds.length
+    ? await supabase
+        .from("hosted_event_guests")
+        .select("hosted_event_id, user_id, status")
+        .in("hosted_event_id", allSceneIds)
+        .in("status", ["accepted", "invited"])
+    : { data: [] };
+
+  const sceneFriendGuestRows = (allSceneGuestRows ?? []).filter((row) =>
+    friendIdList.includes(String(row.user_id))
+  );
 
   const friendProfiles = new Map(
     (friendProfilesData ?? []).map((profile) => [
@@ -162,13 +184,43 @@ export default async function Home() {
     }
   });
 
+  const sceneGoingCounts: Record<string, number> = {};
+  const scenePendingCounts: Record<string, number> = {};
+  const sceneFriendPreviews: Record<string, FriendPreview[]> = {};
+
+  (allSceneGuestRows ?? []).forEach((row: SceneGuestRow) => {
+    const sceneId = row.hosted_event_id;
+
+    if (row.status === "accepted") {
+      sceneGoingCounts[sceneId] = (sceneGoingCounts[sceneId] || 0) + 1;
+    }
+
+    if (row.status === "invited") {
+      scenePendingCounts[sceneId] = (scenePendingCounts[sceneId] || 0) + 1;
+    }
+  });
+
+  sceneFriendGuestRows.forEach((row: SceneGuestRow) => {
+    if (row.status !== "accepted") return;
+
+    const friend = friendProfiles.get(String(row.user_id));
+    if (!friend) return;
+
+    if (!sceneFriendPreviews[row.hosted_event_id]) {
+      sceneFriendPreviews[row.hosted_event_id] = [];
+    }
+
+    sceneFriendPreviews[row.hosted_event_id].push({
+      name: friend.name ?? "Unknown",
+      avatar: friend.avatar ?? null,
+    });
+  });
+
   const friendGoingEvents = (events ?? []).filter(
     (event) => (friendActivity[event.id] || []).length > 0
   );
 
-  const friendGoingEventIds = new Set(
-    friendGoingEvents.map((event) => event.id)
-  );
+  const friendGoingEventIds = new Set(friendGoingEvents.map((event) => event.id));
 
   const trendingEvents = (events ?? [])
     .filter((event) => !friendGoingEventIds.has(event.id))
@@ -283,7 +335,6 @@ export default async function Home() {
           <FriendsActivityFeed items={friendFeedItems} />
         </section>
 
-        {/* YOUR SCENE — only shown when user has hosted or accepted events */}
         {showSceneSection && (
           <section className="mt-10">
             <div className="mb-4 flex items-center justify-between">
@@ -298,51 +349,21 @@ export default async function Home() {
               </Link>
             </div>
 
-            <div className="space-y-3">
-              {allSceneEvents.map((event) => {
-                const isHosting = hostingIds.has(event.id);
-                const eventDate = new Date(event.date);
-                const formatted = eventDate.toLocaleDateString("en-CA", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                });
-                const formattedTime = eventDate.toLocaleTimeString("en-CA", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                });
-
-                return (
-                  <Link
-                    key={event.id}
-                    href={`/scene/${event.id}`}
-                    className="block rounded-2xl border border-white/10 bg-white/5 px-4 py-4 transition hover:bg-white/10"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-medium">{event.title}</p>
-                        <p className="mt-0.5 text-sm text-white/50">
-                          {event.location}
-                        </p>
-                        <p className="mt-0.5 text-xs text-white/30">
-                          {formatted} at {formattedTime}
-                        </p>
-                      </div>
-                      {isHosting && (
-                        <span className="rounded-full border border-white/20 px-2.5 py-1 text-xs text-white/50">
-                          Hosting
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
+            <div className="space-y-5">
+              {allSceneEvents.map((event) => (
+                <SceneCard
+                  key={event.id}
+                  event={event}
+                  isHosting={hostingIds.has(event.id)}
+                  goingCount={sceneGoingCounts[event.id] || 0}
+                  pendingCount={scenePendingCounts[event.id] || 0}
+                  friendPreviews={sceneFriendPreviews[event.id] || []}
+                />
+              ))}
             </div>
           </section>
         )}
 
-        {/* Host an Event CTA — always visible but subtle, below scene section */}
         {currentUserId && (
           <section className="mt-4">
             <Link

@@ -116,9 +116,9 @@ export default function InviteMorePage() {
       await supabase.from("notifications").insert(
         invitedIds.map((userId) => ({
           user_id: userId,
-          type: "event_invite",
+          type: "scene_invite",
           actor_id: session.user.id,
-          event_id: id,
+          scene_id: id,
           message: `${hostName} invited you to ${eventTitle}`,
           read: false,
         }))

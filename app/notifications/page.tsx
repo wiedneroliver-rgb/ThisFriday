@@ -119,7 +119,6 @@ async function goToEventFromNotification(formData: FormData) {
     throw new Error("Failed to RSVP to event");
   }
 
-  // Delete the invite notification after responding
   if (notificationId) {
     await supabase
       .from("notifications")
@@ -133,6 +132,70 @@ async function goToEventFromNotification(formData: FormData) {
   revalidatePath(`/events/${eventId}`);
 
   redirect(`/events/${eventId}`);
+}
+
+async function respondToSceneInvite(formData: FormData) {
+  "use server";
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const sceneId = formData.get("scene_id") as string;
+  const notificationId = Number(formData.get("notification_id"));
+  const status = formData.get("status") as string;
+
+  if (!sceneId || (status !== "accepted" && status !== "declined")) {
+    redirect("/notifications");
+  }
+
+  if (status === "declined") {
+    const { error } = await supabase
+      .from("hosted_event_guests")
+      .delete()
+      .eq("hosted_event_id", sceneId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Error declining scene invite:", error);
+      throw new Error("Failed to decline scene invite");
+    }
+  } else {
+    const { error } = await supabase
+      .from("hosted_event_guests")
+      .update({ status: "accepted" })
+      .eq("hosted_event_id", sceneId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Error accepting scene invite:", error);
+      throw new Error("Failed to accept scene invite");
+    }
+  }
+
+  if (notificationId) {
+    await supabase
+      .from("notifications")
+      .delete()
+      .eq("id", notificationId)
+      .eq("user_id", user.id);
+  }
+
+  revalidatePath("/notifications");
+  revalidatePath("/");
+  revalidatePath(`/scene/${sceneId}`);
+
+  if (status === "accepted") {
+    redirect(`/scene/${sceneId}`);
+  }
+
+  redirect("/notifications");
 }
 
 function formatTimestamp(timestamp: string) {
@@ -157,7 +220,6 @@ export default async function NotificationsPage() {
     .eq("user_id", user.id)
     .eq("read", false);
 
-  // Explicit column select + limit to prevent unbounded growth over time
   const { data: notifications, error } = await supabase
     .from("notifications")
     .select("id, actor_id, event_id, scene_id, type, message, created_at, read")
@@ -229,7 +291,6 @@ export default async function NotificationsPage() {
               const actorName = actor?.display_name || "Someone";
               const safeType = notification.type?.trim() ?? "";
 
-              // Use stored message — always present for notifications created by the app
               const message =
                 notification.message?.trim() ||
                 `${actorName} sent you a notification`;
@@ -354,6 +415,7 @@ export default async function NotificationsPage() {
                   </div>
                 );
               }
+
               if (safeType === "scene_invite") {
                 return (
                   <div
@@ -372,14 +434,66 @@ export default async function NotificationsPage() {
                           {message}
                         </p>
 
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                          Scene Invite
+                        </p>
+
                         <p className="mt-3 text-xs text-white/50">
                           {formatTimestamp(notification.created_at)}
                         </p>
 
-                        <div className="mt-4 flex gap-3">
+                        <div className="mt-4 flex flex-wrap gap-3">
+                          <form action={respondToSceneInvite}>
+                            <input
+                              type="hidden"
+                              name="scene_id"
+                              value={notification.scene_id ?? ""}
+                            />
+                            <input
+                              type="hidden"
+                              name="notification_id"
+                              value={notification.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="status"
+                              value="accepted"
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
+                            >
+                              Accept
+                            </button>
+                          </form>
+
+                          <form action={respondToSceneInvite}>
+                            <input
+                              type="hidden"
+                              name="scene_id"
+                              value={notification.scene_id ?? ""}
+                            />
+                            <input
+                              type="hidden"
+                              name="notification_id"
+                              value={notification.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="status"
+                              value="declined"
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full border border-white/20 px-4 py-2 text-sm text-white transition hover:bg-white hover:text-black"
+                            >
+                              Decline
+                            </button>
+                          </form>
+
                           <Link
                             href={`/scene/${notification.scene_id}`}
-                            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
+                            className="rounded-full border border-white/20 px-4 py-2 text-sm text-white transition hover:bg-white hover:text-black"
                           >
                             View Invite
                           </Link>
@@ -389,6 +503,7 @@ export default async function NotificationsPage() {
                   </div>
                 );
               }
+
               return (
                 <Link
                   key={notification.id}

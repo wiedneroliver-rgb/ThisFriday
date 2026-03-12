@@ -83,7 +83,7 @@ export default function EventCard({
   return (
     <div className="rounded-3xl border border-white/10 bg-zinc-950 p-4 transition hover:bg-white/5">
       <div className="min-w-0">
-        <h3 className="text-lg font-semibold leading-tight tracking-tight text-white sm:text-2xl">
+        <h3 className="text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">
           {event.title}
         </h3>
 

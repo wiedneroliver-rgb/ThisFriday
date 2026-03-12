@@ -32,6 +32,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("signup");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [smsUpdatesOptIn, setSmsUpdatesOptIn] = useState(false);
 
   async function handleAuth() {
     setLoading(true);
@@ -141,6 +142,42 @@ export default function LoginPage() {
 
     if (error) {
       setMessage(error.message);
+      setLoading(false);
+      return;
+    }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setMessage(
+        "Your number was verified, but we could not load your account."
+      );
+      setLoading(false);
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    const { error: profileSaveError } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        sms_updates_opt_in: smsUpdatesOptIn,
+        sms_updates_opt_in_at: smsUpdatesOptIn ? now : null,
+        sms_updates_opt_out_at: smsUpdatesOptIn ? null : now,
+      },
+      {
+        onConflict: "id",
+      }
+    );
+
+    if (profileSaveError) {
+      console.error("SMS consent save error:", profileSaveError);
+      setMessage(
+        "Your number was verified, but we could not save your preferences."
+      );
       setLoading(false);
       return;
     }
@@ -303,17 +340,44 @@ export default function LoginPage() {
           />
         )}
 
-        {(mode === "login" || mode === "signup" || mode === "reset-new-password") && (
+        {(mode === "login" ||
+          mode === "signup" ||
+          mode === "reset-new-password") && (
           <input
             type="password"
             autoComplete={
               mode === "login" ? "current-password" : "new-password"
             }
-            placeholder={mode === "reset-new-password" ? "New password" : "Password"}
+            placeholder={
+              mode === "reset-new-password" ? "New password" : "Password"
+            }
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-4 w-full rounded-lg bg-zinc-900 p-4 text-white outline-none ring-1 ring-zinc-800 focus:ring-zinc-600"
           />
+        )}
+
+        {mode === "signup" && (
+          <div className="mt-4 rounded-lg border border-white/10 bg-zinc-950 p-4 text-left">
+            <label className="flex items-start gap-3 text-sm text-zinc-300">
+              <input
+                type="checkbox"
+                checked={smsUpdatesOptIn}
+                onChange={(e) => setSmsUpdatesOptIn(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border border-white/20 bg-black"
+              />
+              <span>
+                <strong>Notify me when ThisFriday launches.</strong>{" "}
+                Get a text when the app goes live and for important beta
+                updates.
+              </span>
+            </label>
+
+            <p className="mt-2 text-xs text-zinc-500">
+              Consent is optional. Message frequency varies. Reply STOP to
+              unsubscribe.
+            </p>
+          </div>
         )}
 
         {(mode === "verify" || mode === "reset-verify") && (

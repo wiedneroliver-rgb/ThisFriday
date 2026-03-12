@@ -82,7 +82,7 @@ export default function SceneCard({
   return (
     <Link
       href={`/scene/${event.id}`}
-      className="block rounded-3xl border border-white/10 bg-zinc-950 p-4 transition hover:bg-white/5"
+      className="block rounded-3xl border border-white/10 bg-gradient-to-b from-zinc-900 to-zinc-950 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.05)] transition hover:bg-white/5"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -100,7 +100,7 @@ export default function SceneCard({
         </div>
 
         {isHosting && (
-          <span className="shrink-0 rounded-full border border-white/15 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-400">
+          <span className="shrink-0 rounded-full border border-white/15 bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-400">
             Hosting
           </span>
         )}
@@ -126,7 +126,7 @@ export default function SceneCard({
                 ))}
 
                 {friendPreviews.length > 3 && (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-[10px] font-medium text-white">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-[10px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                     +{friendPreviews.length - 3}
                   </div>
                 )}

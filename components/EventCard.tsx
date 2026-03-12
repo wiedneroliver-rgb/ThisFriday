@@ -81,33 +81,20 @@ export default function EventCard({
   friendPreviews = [],
 }: EventCardProps) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-zinc-950 p-4 transition hover:bg-white/5">
-      <div className="min-w-0">
-        <h3 className="text-lg font-semibold leading-tight tracking-tight text-white sm:text-2xl">
+    <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-zinc-900 to-zinc-950 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.05)] transition hover:bg-white/5">
+      <div>
+        <h3 className="text-lg font-semibold leading-tight tracking-tight text-white sm:text-xl">
           {event.title}
         </h3>
 
-        <p className="mt-1 text-sm text-zinc-400 sm:text-base">{event.venue}</p>
+        <p className="mt-1 text-sm text-zinc-400">{event.venue}</p>
 
         <p className="mt-1 text-sm text-zinc-500">
           {formatEventDate(event.date, event.start_time)}
         </p>
       </div>
 
-      <div className="mt-4 flex items-center gap-4">
-        <details className="group">
-          <summary className="cursor-pointer list-none text-sm text-zinc-400 transition hover:text-white">
-            More info{" "}
-            <span className="inline-block transition group-open:rotate-180">
-              ↓
-            </span>
-          </summary>
-
-          <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
-            {event.description || "No description yet."}
-          </p>
-        </details>
-
+      <div className="mt-4">
         <Link
           href={`/events/${event.id}`}
           className="text-sm font-medium text-zinc-300 underline-offset-4 transition hover:text-white hover:underline"
@@ -119,7 +106,7 @@ export default function EventCard({
       <div className="mt-4 border-t border-white/10 pt-4">
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-sm text-zinc-400 sm:text-base">
+            <p className="text-sm text-zinc-400">
               {goingCount} {goingCount === 1 ? "person" : "people"} going
             </p>
 
@@ -136,7 +123,7 @@ export default function EventCard({
                   ))}
 
                   {friendPreviews.length > 3 && (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-[10px] font-medium text-white">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-[10px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                       +{friendPreviews.length - 3}
                     </div>
                   )}

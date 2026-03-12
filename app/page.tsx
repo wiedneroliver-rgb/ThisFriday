@@ -337,16 +337,10 @@ export default async function Home() {
 
         {showSceneSection && (
           <section className="mt-10">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4">
               <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">
                 Your Scene
               </h2>
-              <Link
-                href="/scene/create"
-                className="text-xs text-white/40 transition hover:text-white"
-              >
-                + New Event
-              </Link>
             </div>
 
             <div className="space-y-5">
@@ -368,7 +362,7 @@ export default async function Home() {
           <section className="mt-4">
             <Link
               href="/scene/create"
-              className="flex w-full items-center justify-center rounded-2xl border border-dashed border-white/10 py-3 text-sm text-white/30 transition hover:border-white/20 hover:text-white/50"
+              className="flex w-full items-center justify-center rounded-3xl border border-white/10 bg-gradient-to-b from-zinc-900 to-zinc-950 py-4 text-sm font-medium text-zinc-300 shadow-[0_10px_30px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.05)] transition hover:bg-white/5 hover:text-white"
             >
               + Host an Event
             </Link>

@@ -33,12 +33,13 @@ export default async function AppPage() {
   const supabase = await createClient();
 
   const {
-  data: { user },
-} = await supabase.auth.getUser();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-if (!user) {
-  redirect("/");
-}
+  if (!user) {
+    redirect("/");
+  }
+
   const currentUserId = user?.id ?? null;
 
   const { data: currentProfile } = currentUserId
@@ -58,7 +59,7 @@ if (!user) {
 
   const { data: events, error } = await supabase
     .from("events")
-    .select("id, title, venue, description, date, start_time")
+    .select("id, title, venue, description, date, start_time, poster_url")
     .order("date", { ascending: true });
 
   const { data: friends } = currentUserId
@@ -289,7 +290,7 @@ if (!user) {
               {currentUserId && (
                 <Link
                   href="/profile"
-                  className="flex h-9 items-center rounded-full border border-white/10 bg-white/5 px-4 text-sm text-zinc-300 transition hover:bg-white hover:text-black"
+                  className="flex h-9 items-center rounded-full border border-white/10 bg-white/5 px-4 text-sm text-zinc-300 transition-all duration-150 hover:bg-white hover:text-black active:scale-[0.97] active:bg-white/15 active:text-white touch-manipulation"
                 >
                   Profile
                 </Link>
@@ -298,7 +299,7 @@ if (!user) {
               {currentUserId && (
                 <Link
                   href="/friends"
-                  className="flex h-9 items-center rounded-full border border-white/10 bg-white/5 px-4 text-sm text-zinc-300 transition hover:bg-white hover:text-black"
+                  className="flex h-9 items-center rounded-full border border-white/10 bg-white/5 px-4 text-sm text-zinc-300 transition-all duration-150 hover:bg-white hover:text-black active:scale-[0.97] active:bg-white/15 active:text-white touch-manipulation"
                 >
                   Find Friends
                 </Link>

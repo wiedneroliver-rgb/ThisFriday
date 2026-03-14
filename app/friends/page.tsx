@@ -83,7 +83,23 @@ type SuggestedFriend = ProfileRow & {
   mutualCount: number;
 };
 
-function InitialAvatar({ name }: { name: string | null }) {
+function InitialAvatar({
+  name,
+  avatarUrl,
+}: {
+  name: string | null;
+  avatarUrl?: string | null;
+}) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name || "User avatar"}
+        className="h-10 w-10 rounded-full object-cover"
+      />
+    );
+  }
+
   return (
     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white">
       {(name || "U")[0]?.toUpperCase()}
@@ -106,7 +122,6 @@ function FriendRow({
   mutualCount?: number;
   onAddFriend: (formData: FormData) => Promise<void>;
 }) {
-  // Convert to Sets inside the component for O(1) lookups
   const friendIdSet = new Set(friendIds);
   const outgoingSet = new Set(outgoingIds);
   const incomingSet = new Set(incomingIds);
@@ -121,7 +136,10 @@ function FriendRow({
         href={`/user/${profile.id}?from=/friends`}
         className="flex items-center gap-3 transition hover:opacity-80"
       >
-        <InitialAvatar name={profile.display_name} />
+        <InitialAvatar
+          name={profile.display_name}
+          avatarUrl={profile.avatar_url}
+        />
 
         <div>
           <p className="font-medium">
@@ -183,19 +201,17 @@ export default async function FriendsPage({
   const { q = "" } = await searchParams;
   const trimmedQuery = q.trim();
 
-  // --- OPTIMIZED: Run all independent queries in parallel ---
-  // Incoming and outgoing requests are queried separately to work around RLS.
-  // RLS only allows reading notifications where user_id = current user,
-  // so outgoing requests (where actor_id = current user) need their own query.
   const [
     { data: friendRows },
     { data: incomingRequestRows },
     { data: outgoingRequestRows },
     searchResultsData,
   ] = await Promise.all([
-    supabase.from("friends").select("friend_id").eq("user_id", user.id),
+    supabase
+      .from("friends")
+      .select("user_id, friend_id")
+      .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`),
 
-    // Incoming: rows where someone sent YOU a request — RLS allows this
     supabase
       .from("notifications")
       .select("actor_id")
@@ -203,7 +219,6 @@ export default async function FriendsPage({
       .eq("user_id", user.id)
       .limit(200),
 
-    // Outgoing: rows YOU sent — scoped to actor_id so RLS allows this
     supabase
       .from("notifications")
       .select("user_id")
@@ -222,36 +237,41 @@ export default async function FriendsPage({
           .limit(20)
       : Promise.resolve({ data: [] }),
   ]);
-  // ----------------------------------------------------------
 
-  const friendIds = friendRows?.map((row) => row.friend_id) ?? [];
+  const friendIds = Array.from(
+    new Set(
+      (friendRows ?? []).map((row) =>
+        row.user_id === user.id ? row.friend_id : row.user_id
+      )
+    )
+  );
+
   const excludedIdSet = new Set([user.id, ...friendIds]);
 
-  // Plain arrays for passing as props
   const incomingIds = (incomingRequestRows ?? []).map((row) => row.actor_id);
   const outgoingIds = (outgoingRequestRows ?? []).map((row) => row.user_id);
 
   const searchResults: ProfileRow[] =
     (searchResultsData.data as ProfileRow[]) ?? [];
 
-  // --- OPTIMIZED: Fetch friend profiles and second-degree connections in parallel ---
   const [friendsListData, secondDegreeData] = await Promise.all([
     friendIds.length > 0
       ? supabase
           .from("profiles")
           .select("id, display_name, avatar_url")
           .in("id", friendIds)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
 
     friendIds.length > 0
       ? supabase
           .from("friends")
           .select("user_id, friend_id")
-          .in("user_id", friendIds)
+          .or(
+            `user_id.in.(${friendIds.join(",")}),friend_id.in.(${friendIds.join(",")})`
+          )
           .limit(500)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
   ]);
-  // ------------------------------------------------------------------------------
 
   const friendsList: ProfileRow[] =
     (friendsListData.data as ProfileRow[]) ?? [];
@@ -259,8 +279,17 @@ export default async function FriendsPage({
   const mutualCounts = new Map<string, number>();
 
   (secondDegreeData.data ?? []).forEach((row) => {
-    const suggestedId = row.friend_id;
+    const isConnectedToFriend =
+      friendIds.includes(row.user_id) || friendIds.includes(row.friend_id);
+
+    if (!isConnectedToFriend) return;
+
+    const suggestedId = friendIds.includes(row.user_id)
+      ? row.friend_id
+      : row.user_id;
+
     if (excludedIdSet.has(suggestedId)) return;
+
     mutualCounts.set(suggestedId, (mutualCounts.get(suggestedId) ?? 0) + 1);
   });
 
@@ -273,13 +302,31 @@ export default async function FriendsPage({
       .select("id, display_name, avatar_url")
       .in("id", suggestedIds);
 
-    suggestedFriends = ((suggestedProfiles ?? []) as ProfileRow[])
-      .map((profile) => ({
-        ...profile,
-        mutualCount: mutualCounts.get(profile.id) ?? 0,
-      }))
-      .sort((a, b) => b.mutualCount - a.mutualCount);
+    suggestedFriends = Array.from(
+      new Map(
+        ((suggestedProfiles ?? []) as ProfileRow[]).map((profile) => [
+          profile.id,
+          {
+            ...profile,
+            mutualCount: mutualCounts.get(profile.id) ?? 0,
+          },
+        ])
+      ).values()
+    ).sort((a, b) => b.mutualCount - a.mutualCount);
   }
+
+  console.log("FRIENDS PAGE DEBUG");
+  console.log("user.id:", user.id);
+  console.log("raw friendRows:", friendRows);
+  console.log("derived friendIds:", friendIds);
+  console.log("friendsListData:", friendsListData.data);
+  console.log("friendsListError:", friendsListData.error);
+  console.log("secondDegreeData:", secondDegreeData.data);
+  console.log("secondDegreeError:", secondDegreeData.error);
+  console.log("friendsList:", friendsList);
+  console.log("incomingIds:", incomingIds);
+  console.log("outgoingIds:", outgoingIds);
+  console.log("suggestedFriends:", suggestedFriends);
 
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">
@@ -378,7 +425,10 @@ export default async function FriendsPage({
                   href={`/user/${friend.id}?from=/friends`}
                   className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 transition hover:bg-white/10"
                 >
-                  <InitialAvatar name={friend.display_name} />
+                  <InitialAvatar
+                    name={friend.display_name}
+                    avatarUrl={friend.avatar_url}
+                  />
                   <p className="font-medium">
                     {friend.display_name || "Unnamed user"}
                   </p>

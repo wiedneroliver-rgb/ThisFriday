@@ -60,6 +60,7 @@ export default async function AppPage() {
   const { data: events, error } = await supabase
     .from("events")
     .select("id, title, venue, description, date, start_time, poster_url")
+    .eq("is_archived", false)
     .order("date", { ascending: true });
 
   const { data: friends } = currentUserId

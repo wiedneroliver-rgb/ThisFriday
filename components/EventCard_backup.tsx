@@ -81,29 +81,29 @@ export default function EventCard({
   friendPreviews = [],
 }: EventCardProps) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-zinc-950 p-4 transition hover:bg-white/5">
-      <div className="min-w-0">
-        <h3 className="text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">
+    <div className="rounded-3xl border border-white/10 bg-zinc-950 p-4 sm:p-5">
+      <div className="space-y-2">
+        <h3 className="text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">
           {event.title}
         </h3>
 
-        <p className="mt-1 text-sm text-zinc-400 sm:text-base">{event.venue}</p>
+        <p className="text-base text-zinc-400 sm:text-lg">{event.venue}</p>
 
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="text-sm text-zinc-500 sm:text-base">
           {formatEventDate(event.date, event.start_time)}
         </p>
       </div>
 
-      <div className="mt-4 flex items-center gap-4">
+      <div className="mt-5 flex items-center gap-4">
         <details className="group">
-          <summary className="cursor-pointer list-none text-sm text-zinc-400 transition hover:text-white">
+          <summary className="cursor-pointer list-none text-base text-zinc-400 transition hover:text-white">
             More info{" "}
             <span className="inline-block transition group-open:rotate-180">
               ↓
             </span>
           </summary>
 
-          <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
+          <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-400">
             {event.description || "No description yet."}
           </p>
         </details>
@@ -116,33 +116,33 @@ export default function EventCard({
         </Link>
       </div>
 
-      <div className="mt-4 border-t border-white/10 pt-4">
+      <div className="mt-5 border-t border-white/10 pt-5">
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-sm text-zinc-400 sm:text-base">
+            <p className="text-lg text-zinc-400 sm:text-xl">
               {goingCount} {goingCount === 1 ? "person" : "people"} going
             </p>
 
             {friendPreviews.length > 0 && (
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-3 flex items-center gap-3">
                 <div className="flex -space-x-2">
                   {friendPreviews.slice(0, 3).map((friend, index) => (
                     <UserAvatar
                       key={`${friend.name}-${index}`}
                       src={friend.avatar}
                       fallback={friend.name}
-                      size="h-7 w-7"
+                      size="h-8 w-8"
                     />
                   ))}
 
                   {friendPreviews.length > 3 && (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-[10px] font-medium text-white">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-[10px] font-medium text-white">
                       +{friendPreviews.length - 3}
                     </div>
                   )}
                 </div>
 
-                <p className="line-clamp-1 text-xs text-zinc-400">
+                <p className="line-clamp-2 text-xs text-zinc-400 sm:text-sm">
                   {getFriendLabel(friendPreviews)}
                 </p>
               </div>

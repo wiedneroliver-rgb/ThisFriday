@@ -56,7 +56,6 @@ export default async function EventDetailsPage({
 
   const currentUserId = user?.id ?? null;
 
-  // --- OPTIMIZED: Run event fetch, going count, and all going rows in parallel ---
   const [
     { data: event, error },
     { count: goingCount },
@@ -64,8 +63,11 @@ export default async function EventDetailsPage({
   ] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, venue, description, date, start_time, ticket_link")
+      .select(
+        "id, title, venue, description, date, start_time, ticket_link"
+      )
       .eq("id", eventId)
+      .eq("is_archived", false)
       .maybeSingle(),
     supabase
       .from("going")
@@ -75,7 +77,6 @@ export default async function EventDetailsPage({
       ? supabase.from("going").select("user_id").eq("event_id", eventId)
       : Promise.resolve({ data: [] }),
   ]);
-  // -----------------------------------------------------------------------------
 
   if (error || !event) {
     return (
@@ -87,7 +88,6 @@ export default async function EventDetailsPage({
     );
   }
 
-  // Derive currentUserGoing from goingRows — no extra query needed
   const currentUserGoing = (goingRows ?? []).some(
     (row) => String(row.user_id) === currentUserId
   );
@@ -101,7 +101,6 @@ export default async function EventDetailsPage({
 
   const friendIdList = (friends ?? []).map((friend) => String(friend.friend_id));
 
-  // Derive which friends are going in-memory — no extra query needed
   const goingUserIds = (goingRows ?? []).map((row) => String(row.user_id));
   const goingFriendIds = goingUserIds.filter((id) => friendIdList.includes(id));
 

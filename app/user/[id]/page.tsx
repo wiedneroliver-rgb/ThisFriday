@@ -71,7 +71,6 @@ export default async function UserPage({
     redirect("/login");
   }
 
-  // --- OPTIMIZED: Profile fetch runs in parallel with all other queries ---
   const [
     { data: profile },
     { data: viewedUserFriendRows },
@@ -101,15 +100,20 @@ export default async function UserPage({
       .from("going")
       .select("event_id")
       .eq("user_id", id)
-      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+      .gte(
+        "created_at",
+        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      ),
 
     supabase
       .from("going")
       .select("event_id")
       .eq("user_id", user.id)
-      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+      .gte(
+        "created_at",
+        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      ),
   ]);
-  // -----------------------------------------------------------------------
 
   if (!profile) {
     notFound();
@@ -125,7 +129,6 @@ export default async function UserPage({
     (currentUserFriendRows ?? []).map((row) => row.friend_id)
   );
 
-  // Check if this person is already a friend
   const isFriend = currentUserFriendIds.has(id);
 
   const mutualFriendCount = Array.from(viewedUserFriendIds).filter(
@@ -152,6 +155,7 @@ export default async function UserPage({
             .from("events")
             .select("id, title, venue, date")
             .in("id", bothGoingEventIds)
+            .eq("is_archived", false)
             .order("date", { ascending: true })
         : Promise.resolve({ data: [] }),
       theyAreGoingOnlyEventIds.length
@@ -159,6 +163,7 @@ export default async function UserPage({
             .from("events")
             .select("id, title, venue, date")
             .in("id", theyAreGoingOnlyEventIds)
+            .eq("is_archived", false)
             .order("date", { ascending: true })
         : Promise.resolve({ data: [] }),
     ]);
@@ -200,7 +205,6 @@ export default async function UserPage({
                   <p>{mutualFriendCount} mutual friends</p>
                 </div>
 
-                {/* Remove friend button — only shown if already friends */}
                 {isFriend && (
                   <form action={removeFriend} className="mt-3">
                     <input type="hidden" name="friend_id" value={id} />

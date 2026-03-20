@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { createClient } from "@/lib/client";
 import { useRouter } from "next/navigation";
@@ -468,7 +469,23 @@ export default function LoginPage() {
             Back
           </button>
         )}
-
+        <p className="mt-6 text-center text-xs leading-5 text-zinc-500">
+          By continuing, you agree to our{" "}
+          <Link
+            href="/terms"
+            className="underline underline-offset-4 transition hover:text-white"
+          >
+            Terms of Use
+          </Link>{" "}
+          and{" "}
+          <Link
+            href="/privacy"
+            className="underline underline-offset-4 transition hover:text-white"
+          >
+            Privacy Policy
+          </Link>
+          .
+        </p>
         {message && <p className="mt-4 text-sm text-zinc-400">{message}</p>}
       </div>
     </main>

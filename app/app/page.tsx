@@ -428,7 +428,27 @@ export default async function AppPage() {
             <LogoutButton />
           </section>
         )}
+        <footer className="mt-12 border-t border-white/10 pt-6 text-center text-xs text-zinc-500">
+          <p>
+            <Link
+              href="/terms"
+              className="underline underline-offset-4 transition hover:text-white"
+            >
+              Terms of Use
+            </Link>{" "}
+            ·{" "}
+            <Link
+              href="/privacy"
+              className="underline underline-offset-4 transition hover:text-white"
+            >
+              Privacy Policy
+            </Link>
+          </p>
 
+          <p className="mt-2 text-[10px] text-zinc-600">
+            © 2026 ThisFriday
+          </p>
+        </footer>
         {error && <p className="mt-8 text-sm text-red-400">{error.message}</p>}
       </div>
     </main>

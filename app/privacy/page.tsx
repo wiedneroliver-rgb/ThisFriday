@@ -96,7 +96,7 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-medium">8. Contact</h2>
           <p>
             If you have any questions about this Privacy Policy, you can contact
-            us at: thisfridayapp@gmail.com
+            us at: support@thisfriday.ca
           </p>
         </section>
       </div>

@@ -36,7 +36,7 @@ export default function Home() {
       >
         <h1
           style={{
-            fontFamily: "var(--font-syne)",
+            fontFamily: "var(--font-inter)",
             fontWeight: 800,
             fontSize: "clamp(2.5rem, 10vw, 3.5rem)",
             letterSpacing: "-0.02em",
@@ -50,7 +50,7 @@ export default function Home() {
 
         <p
           style={{
-            fontFamily: "var(--font-dm-sans)",
+            fontFamily: "var(--font-inter)",
             fontWeight: 300,
             fontSize: "1.0625rem",
             color: "rgba(240,237,232,0.6)",
@@ -89,7 +89,7 @@ export default function Home() {
           bottom: "2rem",
           display: "flex",
           gap: "1.5rem",
-          fontFamily: "var(--font-dm-sans)",
+          fontFamily: "var(--font-inter)",
           fontWeight: 300,
           fontSize: "0.75rem",
           color: "rgba(240,237,232,0.35)",

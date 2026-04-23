@@ -97,7 +97,7 @@ export default function ScenePage() {
           {/* wordmark */}
           <span
             style={{
-              fontFamily: "var(--font-syne)",
+              fontFamily: "var(--font-inter)",
               fontWeight: 800,
               fontSize: "1.75rem",
               letterSpacing: "-0.02em",
@@ -112,7 +112,7 @@ export default function ScenePage() {
             <>
               <p
                 style={{
-                  fontFamily: "var(--font-syne)",
+                  fontFamily: "var(--font-inter)",
                   fontWeight: 700,
                   fontSize: "1.5rem",
                   letterSpacing: "-0.02em",
@@ -126,7 +126,7 @@ export default function ScenePage() {
 
               <p
                 style={{
-                  fontFamily: "var(--font-dm-sans)",
+                  fontFamily: "var(--font-inter)",
                   fontWeight: 300,
                   fontSize: "0.9375rem",
                   color: "rgba(240,237,232,0.5)",
@@ -192,7 +192,7 @@ export default function ScenePage() {
               <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
                 <p
                   style={{
-                    fontFamily: "var(--font-syne)",
+                    fontFamily: "var(--font-inter)",
                     fontWeight: 700,
                     fontSize: "1.25rem",
                     letterSpacing: "-0.01em",
@@ -204,7 +204,7 @@ export default function ScenePage() {
                 </p>
                 <p
                   style={{
-                    fontFamily: "var(--font-dm-sans)",
+                    fontFamily: "var(--font-inter)",
                     fontWeight: 300,
                     fontSize: "0.875rem",
                     color: "rgba(240,237,232,0.4)",

@@ -4,7 +4,21 @@
     "details": [
       {
         "appID": "54YZ4DCDN7.ca.ThisFriday",
-        "paths": ["/scene/*"]
+        "paths": [
+          "/scene/*",
+          "/post/*",
+          "/event/*",
+          "/user/*",
+          "/invite",
+          "/invite?*"
+        ],
+        "components": [
+          { "/": "/scene/*" },
+          { "/": "/post/*" },
+          { "/": "/event/*" },
+          { "/": "/user/*" },
+          { "/": "/invite*" }
+        ]
       }
     ]
   }

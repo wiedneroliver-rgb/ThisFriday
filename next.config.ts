@@ -14,6 +14,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      { source: "/scene/:id", destination: "/" },
+      { source: "/post/:id", destination: "/" },
+      { source: "/event/:id", destination: "/" },
+      { source: "/user/:id", destination: "/" },
+      { source: "/invite", destination: "/" },
+    ];
+  },
 };
 
 export default nextConfig;

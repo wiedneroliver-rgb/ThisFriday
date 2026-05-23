@@ -3,8 +3,14 @@
     "apps": [],
     "details": [
       {
-        "appID": "54YZ4DCDN7.ca.ThisFriday",
-        "paths": ["/scene/*"]
+        "appIDs": ["54YZ4DCDN7.ca.ThisFriday"],
+        "components": [
+          { "/": "/scene/*" },
+          { "/": "/post/*" },
+          { "/": "/event/*" },
+          { "/": "/user/*" },
+          { "/": "/invite*" }
+        ]
       }
     ]
   }

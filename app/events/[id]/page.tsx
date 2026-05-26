@@ -422,7 +422,9 @@ export default function EventDetailPage() {
                     key={comment.id}
                     comment={comment}
                     isLiked={likedCommentIds.has(comment.id)}
+                    likedIds={likedCommentIds}
                     onLike={() => toggleLike(comment.id)}
+                    onLikeById={(id) => toggleLike(id)}
                     onReply={() => {
                       setReplyingTo(comment);
                       commentInputRef.current?.focus();
@@ -441,8 +443,8 @@ export default function EventDetailPage() {
           borderTop: "1px solid rgba(255,255,255,0.07)",
           backdropFilter: "blur(16px)",
           padding: "10px 16px",
-          paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
-          zIndex: 40,
+          paddingBottom: "calc(10px + env(safe-area-inset-bottom, 8px))",
+          zIndex: 55,
         }}>
           <style>{`@media (min-width: 768px) { .event-bottom-bar { left: 220px !important; } }`}</style>
           {replyingTo && (
@@ -510,17 +512,18 @@ export default function EventDetailPage() {
           </div>
         </div>
 
-        <BottomNav active="feed" />
       </div>
     </PageShell>
   );
 }
 
-function CommentItem({ comment, onReply, onLike, isLiked, depth = 0 }: {
+function CommentItem({ comment, onReply, onLike, onLikeById, isLiked, likedIds, depth = 0 }: {
   comment: Comment;
   onReply: () => void;
   onLike: () => void;
+  onLikeById: (id: string) => void;
   isLiked: boolean;
+  likedIds: Set<string>;
   depth?: number;
 }) {
   return (
@@ -586,8 +589,8 @@ function CommentItem({ comment, onReply, onLike, isLiked, depth = 0 }: {
           key={reply.id}
           comment={reply}
           onReply={onReply}
-          onLike={onLike}
-          isLiked={isLiked}
+          onLike={() => onLikeById(reply.id)}
+          isLiked={likedIds?.has(reply.id) ?? false}
           depth={1}
         />
       ))}

@@ -55,35 +55,19 @@ export default function DiscoverPage() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
-    const userId = user.id.toLowerCase();
 
-    // Get friends
-    const { data: friendRows } = await supabase
-      .from("friends").select("friend_id").eq("user_id", userId);
-    const friendIds = (friendRows || []).map((r: { friend_id: string }) => r.friend_id);
-    const allIds = [...friendIds, userId];
-
-    // Friends' events (any visibility)
-    const { data: friendEvents } = await supabase
-      .from("hosted_events").select("*")
-      .in("host_id", allIds)
-      .order("date", { ascending: true });
-
-    // All public/semi_public events
+    // Only fully public area/venue events, upcoming
+    const now = new Date().toISOString();
     const { data: publicEvents } = await supabase
       .from("hosted_events").select("*")
-      .in("visibility", ["semi_public", "public"])
+      .eq("visibility", "public")
+      .gte("date", now)
       .order("date", { ascending: true });
 
-    // Merge, dedup, exclude own events
-    const knownIds = new Set((friendEvents || []).map((e: HostedEvent) => e.id));
-    const extra = (publicEvents || []).filter((e: HostedEvent) => !knownIds.has(e.id));
-    const allEvents: HostedEvent[] = [...(friendEvents || []), ...extra]
-      .filter((e: HostedEvent) => e.host_id !== userId);
+    const loadedEvents = publicEvents || [];
+    setEvents(loadedEvents);
 
-    setEvents(allEvents);
-
-    const hostIds = [...new Set(allEvents.map((e: HostedEvent) => e.host_id))];
+    const hostIds = [...new Set(loadedEvents.map((e: HostedEvent) => e.host_id))];
     if (hostIds.length > 0) {
       const { data: profiles } = await supabase
         .from("profiles").select("id,display_name,avatar_url").in("id", hostIds);
@@ -166,7 +150,7 @@ export default function DiscoverPage() {
           <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(240,237,232,0.3)" }}>Loading...</div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(240,237,232,0.3)" }}>
-            <p>No public events found</p>
+            <p>No events in your area right now</p>
           </div>
         ) : (
           <div style={{

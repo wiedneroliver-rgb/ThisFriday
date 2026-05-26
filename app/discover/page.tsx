@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 import PageShell from "@/components/PageShell";
+import CityPicker, { getSelectedCity } from "@/components/CityPicker";
 
 interface HostedEvent {
   id: string;
@@ -48,19 +49,31 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedFlare, setSelectedFlare] = useState<string | null>(null);
+  const [city, setCity] = useState("Victoria");
 
-  useEffect(() => { loadEvents(); }, []);
+  useEffect(() => {
+    setCity(getSelectedCity());
+    const handler = (e: Event) => {
+      setCity((e as CustomEvent).detail as string);
+    };
+    window.addEventListener("cityChanged", handler);
+    return () => window.removeEventListener("cityChanged", handler);
+  }, []);
 
-  async function loadEvents() {
+  useEffect(() => { loadEvents(city); }, [city]);
+
+  async function loadEvents(currentCity: string) {
+    setLoading(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
 
-    // Only fully public area/venue events, upcoming
+    // Only fully public area/venue events, upcoming, in the selected city
     const now = new Date().toISOString();
     const { data: publicEvents } = await supabase
       .from("hosted_events").select("*")
       .eq("visibility", "public")
+      .ilike("location", `%${currentCity}%`)
       .gte("date", now)
       .order("date", { ascending: true });
 
@@ -94,9 +107,12 @@ export default function DiscoverPage() {
         padding: "16px 16px 12px",
         borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}>
-        <h1 style={{ fontWeight: 800, fontSize: "1.5rem", letterSpacing: "-0.02em", margin: "0 0 12px" }}>
-          Discover
-        </h1>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+          <h1 style={{ fontWeight: 800, fontSize: "1.5rem", letterSpacing: "-0.02em", margin: 0 }}>
+            Discover
+          </h1>
+          <CityPicker />
+        </div>
         <input
           type="text"
           placeholder="Search events..."

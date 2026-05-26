@@ -29,7 +29,7 @@ interface Comment {
   id: string;
   hosted_event_id: string;
   user_id: string;
-  body: string;
+  content: string;
   parent_id: string | null;
   created_at: string;
   profile?: Profile;
@@ -227,12 +227,13 @@ export default function EventDetailPage() {
     if (!commentText.trim() || sendingComment) return;
     setSendingComment(true);
     const supabase = createClient();
-    const { data } = await supabase.from("scene_comments").insert({
+    const { data, error } = await supabase.from("scene_comments").insert({
       hosted_event_id: eventId,
       user_id: currentUserId,
-      body: commentText.trim(),
+      content: commentText.trim(),
       parent_id: replyingTo?.id ?? null,
     }).select().single();
+    if (error) { console.error("Comment insert error:", error); setSendingComment(false); return; }
 
     if (data) {
       const newComment: Comment = { ...data, profile: myProfile ?? undefined, replies: [] };
@@ -552,7 +553,7 @@ function CommentItem({ comment, onReply, onLike, onLikeById, isLiked, likedIds, 
             </span>
           </div>
           <p style={{ margin: 0, fontSize: "0.88rem", color: "rgba(240,237,232,0.8)", lineHeight: 1.4 }}>
-            {comment.body}
+            {comment.content}
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: "14px", marginTop: "6px" }}>
             {depth === 0 && (

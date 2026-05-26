@@ -6,6 +6,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 import PageShell from "@/components/PageShell";
+import CityPicker from "@/components/CityPicker";
 
 interface Profile {
   id: string;
@@ -178,13 +179,55 @@ export default function FeedPage() {
         <div className="desktop-hide" style={{
           position: "sticky", top: 0, zIndex: 10,
           background: "rgba(8,8,8,0.95)", backdropFilter: "blur(12px)",
-          padding: "16px 16px 12px",
+          padding: "12px 16px 12px",
           borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <Image src="/logo.png" alt="" width={30} height={30} style={{ borderRadius: "8px" }} />
-            <h1 style={{ fontWeight: 800, fontSize: "1.5rem", letterSpacing: "-0.02em", margin: 0 }}>ThisFriday</h1>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <Image src="/logo.png" alt="" width={28} height={28} style={{ borderRadius: "7px" }} />
+              <span style={{ fontWeight: 800, fontSize: "1.3rem", letterSpacing: "-0.02em" }}>ThisFriday</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <CityPicker />
+              <button
+                onClick={() => router.push("/notifications")}
+                style={{
+                  width: 34, height: 34, borderRadius: "50%",
+                  background: "rgba(255,255,255,0.07)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#F0EDE8", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "1rem",
+                }}
+              >
+                🔔
+              </button>
+            </div>
           </div>
+        </div>
+
+        {/* Desktop header row (inside page content area, right of sidebar) */}
+        <div className="mobile-hide" style={{
+          position: "sticky", top: 0, zIndex: 10,
+          background: "rgba(8,8,8,0.95)", backdropFilter: "blur(12px)",
+          padding: "12px 20px",
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px",
+        }}>
+          <CityPicker />
+          <button
+            onClick={() => router.push("/notifications")}
+            style={{
+              width: 34, height: 34, borderRadius: "50%",
+              background: "rgba(255,255,255,0.07)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "#F0EDE8", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "1rem",
+            }}
+          >
+            🔔
+          </button>
         </div>
 
         {/* Feed */}

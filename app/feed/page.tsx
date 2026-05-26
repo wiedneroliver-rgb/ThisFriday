@@ -174,8 +174,8 @@ export default function FeedPage() {
   return (
     <PageShell>
       <div style={{ background: "#080808", minHeight: "100vh", color: "#F0EDE8" }}>
-        {/* Header */}
-        <div style={{
+        {/* Header — mobile only (desktop has sidebar branding) */}
+        <div className="desktop-hide" style={{
           position: "sticky", top: 0, zIndex: 10,
           background: "rgba(8,8,8,0.95)", backdropFilter: "blur(12px)",
           padding: "16px 16px 12px",
@@ -188,7 +188,7 @@ export default function FeedPage() {
         </div>
 
         {/* Feed */}
-        <div style={{ padding: "12px 0", paddingBottom: "80px" }}>
+        <div style={{ padding: "12px 0", paddingBottom: "80px", maxWidth: "600px", margin: "0 auto" }}>
           {loading ? (
             <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(240,237,232,0.3)" }}>
               Loading...
@@ -250,7 +250,7 @@ function FeedCard({ item, currentUserId, onJoin, joining, onTap }: {
           <img
             src={event.photo_url!}
             alt={event.title}
-            style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }}
+            style={{ width: "100%", height: "clamp(220px, 55vw, 360px)", objectFit: "cover", display: "block" }}
           />
           {/* Dark gradient from bottom */}
           <div style={{

@@ -34,6 +34,7 @@ interface Comment {
   created_at: string;
   profile?: Profile;
   replies?: Comment[];
+  likeCount?: number;
 }
 
 const FLARE_COLORS: Record<string, string> = {
@@ -79,6 +80,7 @@ export default function EventDetailPage() {
   const [sendingComment, setSendingComment] = useState(false);
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set());
   const commentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadEvent(); }, [eventId]);
@@ -147,10 +149,25 @@ export default function EventDetailPage() {
       .from("profiles").select("id,display_name,avatar_url").in("id", userIds);
     const profileMap = Object.fromEntries((profiles || []).map((p: Profile) => [p.id, p]));
 
+    // Load likes
+    const commentIds = rawComments.map((c: Comment) => c.id);
+    const { data: likes } = await supabase
+      .from("scene_comment_likes").select("comment_id,user_id")
+      .in("comment_id", commentIds);
+
+    const likeCountMap: Record<string, number> = {};
+    const myLiked = new Set<string>();
+    for (const like of likes || []) {
+      likeCountMap[like.comment_id] = (likeCountMap[like.comment_id] || 0) + 1;
+      if (like.user_id.toLowerCase() === userId.toLowerCase()) myLiked.add(like.comment_id);
+    }
+    setLikedCommentIds(myLiked);
+
     const enriched: Comment[] = rawComments.map((c: Comment) => ({
       ...c,
       profile: profileMap[c.user_id],
       replies: [],
+      likeCount: likeCountMap[c.id] || 0,
     }));
 
     const topLevel = enriched.filter((c) => !c.parent_id);
@@ -163,6 +180,30 @@ export default function EventDetailPage() {
 
     setComments(threaded);
     setLoadingComments(false);
+  }
+
+  async function toggleLike(commentId: string) {
+    const supabase = createClient();
+    const isLiked = likedCommentIds.has(commentId);
+    if (isLiked) {
+      await supabase.from("scene_comment_likes")
+        .delete().eq("comment_id", commentId).eq("user_id", currentUserId);
+      setLikedCommentIds((prev) => { const s = new Set(prev); s.delete(commentId); return s; });
+      setComments((prev) => updateLikeCount(prev, commentId, -1));
+    } else {
+      await supabase.from("scene_comment_likes")
+        .insert({ comment_id: commentId, user_id: currentUserId });
+      setLikedCommentIds((prev) => new Set(prev).add(commentId));
+      setComments((prev) => updateLikeCount(prev, commentId, 1));
+    }
+  }
+
+  function updateLikeCount(comments: Comment[], id: string, delta: number): Comment[] {
+    return comments.map((c) => {
+      if (c.id === id) return { ...c, likeCount: Math.max(0, (c.likeCount || 0) + delta) };
+      if (c.replies?.length) return { ...c, replies: updateLikeCount(c.replies, id, delta) };
+      return c;
+    });
   }
 
   async function toggleJoin() {
@@ -380,6 +421,8 @@ export default function EventDetailPage() {
                   <CommentItem
                     key={comment.id}
                     comment={comment}
+                    isLiked={likedCommentIds.has(comment.id)}
+                    onLike={() => toggleLike(comment.id)}
                     onReply={() => {
                       setReplyingTo(comment);
                       commentInputRef.current?.focus();
@@ -392,7 +435,7 @@ export default function EventDetailPage() {
         </div>
 
         {/* Fixed bottom bar */}
-        <div style={{
+        <div className="event-bottom-bar" style={{
           position: "fixed", bottom: 0, left: 0, right: 0,
           background: "rgba(8,8,8,0.97)",
           borderTop: "1px solid rgba(255,255,255,0.07)",
@@ -401,6 +444,7 @@ export default function EventDetailPage() {
           paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
           zIndex: 40,
         }}>
+          <style>{`@media (min-width: 768px) { .event-bottom-bar { left: 220px !important; } }`}</style>
           {replyingTo && (
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -472,13 +516,15 @@ export default function EventDetailPage() {
   );
 }
 
-function CommentItem({ comment, onReply, depth = 0 }: {
+function CommentItem({ comment, onReply, onLike, isLiked, depth = 0 }: {
   comment: Comment;
   onReply: () => void;
+  onLike: () => void;
+  isLiked: boolean;
   depth?: number;
 }) {
   return (
-    <div style={{ marginLeft: depth > 0 ? "32px" : 0 }}>
+    <div style={{ marginLeft: depth > 0 ? "36px" : 0 }}>
       <div style={{
         display: "flex", gap: "10px",
         padding: "10px 0",
@@ -505,22 +551,45 @@ function CommentItem({ comment, onReply, depth = 0 }: {
           <p style={{ margin: 0, fontSize: "0.88rem", color: "rgba(240,237,232,0.8)", lineHeight: 1.4 }}>
             {comment.body}
           </p>
-          {depth === 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "14px", marginTop: "6px" }}>
+            {depth === 0 && (
+              <button
+                onClick={onReply}
+                style={{
+                  background: "none", border: "none",
+                  color: "rgba(240,237,232,0.3)", fontSize: "0.72rem",
+                  cursor: "pointer", padding: 0,
+                }}
+              >
+                Reply
+              </button>
+            )}
             <button
-              onClick={onReply}
+              onClick={onLike}
               style={{
                 background: "none", border: "none",
-                color: "rgba(240,237,232,0.3)", fontSize: "0.72rem",
-                cursor: "pointer", padding: "4px 0 0", marginTop: "2px",
+                color: isLiked ? "#e05a8a" : "rgba(240,237,232,0.3)",
+                fontSize: "0.72rem", cursor: "pointer", padding: 0,
+                display: "flex", alignItems: "center", gap: "4px",
               }}
             >
-              Reply
+              <span style={{ fontSize: "0.85rem" }}>{isLiked ? "♥" : "♡"}</span>
+              {(comment.likeCount || 0) > 0 && (
+                <span>{comment.likeCount}</span>
+              )}
             </button>
-          )}
+          </div>
         </div>
       </div>
       {comment.replies?.map((reply) => (
-        <CommentItem key={reply.id} comment={reply} onReply={onReply} depth={1} />
+        <CommentItem
+          key={reply.id}
+          comment={reply}
+          onReply={onReply}
+          onLike={onLike}
+          isLiked={isLiked}
+          depth={1}
+        />
       ))}
     </div>
   );

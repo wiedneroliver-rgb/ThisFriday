@@ -55,16 +55,35 @@ export default function DiscoverPage() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
+    const userId = user.id.toLowerCase();
 
-    const { data } = await supabase
+    // Get friends
+    const { data: friendRows } = await supabase
+      .from("friends").select("friend_id").eq("user_id", userId);
+    const friendIds = (friendRows || []).map((r: { friend_id: string }) => r.friend_id);
+    const allIds = [...friendIds, userId];
+
+    // Friends' events (any visibility)
+    const { data: friendEvents } = await supabase
+      .from("hosted_events").select("*")
+      .in("host_id", allIds)
+      .order("date", { ascending: true });
+
+    // All public/semi_public events
+    const { data: publicEvents } = await supabase
       .from("hosted_events").select("*")
       .in("visibility", ["semi_public", "public"])
       .order("date", { ascending: true });
 
-    const evts = data || [];
-    setEvents(evts);
+    // Merge, dedup, exclude own events
+    const knownIds = new Set((friendEvents || []).map((e: HostedEvent) => e.id));
+    const extra = (publicEvents || []).filter((e: HostedEvent) => !knownIds.has(e.id));
+    const allEvents: HostedEvent[] = [...(friendEvents || []), ...extra]
+      .filter((e: HostedEvent) => e.host_id !== userId);
 
-    const hostIds = [...new Set(evts.map((e: HostedEvent) => e.host_id))];
+    setEvents(allEvents);
+
+    const hostIds = [...new Set(allEvents.map((e: HostedEvent) => e.host_id))];
     if (hostIds.length > 0) {
       const { data: profiles } = await supabase
         .from("profiles").select("id,display_name,avatar_url").in("id", hostIds);

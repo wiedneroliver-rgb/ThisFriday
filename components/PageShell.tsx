@@ -8,9 +8,11 @@ export default function PageShell({ children }: { children: React.ReactNode }) {
       </div>
       <style>{`
         @media (min-width: 768px) {
-          .page-content {
-            margin-left: 220px;
-          }
+          .page-content { margin-left: 220px; }
+          .desktop-hide { display: none !important; }
+        }
+        @media (max-width: 767px) {
+          .mobile-hide { display: none !important; }
         }
       `}</style>
     </>

@@ -590,7 +590,9 @@ function CommentItem({ comment, onReply, onLike, onLikeById, isLiked, likedIds, 
           comment={reply}
           onReply={onReply}
           onLike={() => onLikeById(reply.id)}
+          onLikeById={onLikeById}
           isLiked={likedIds?.has(reply.id) ?? false}
+          likedIds={likedIds}
           depth={1}
         />
       ))}

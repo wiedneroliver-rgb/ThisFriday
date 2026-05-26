@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 type Tab = "feed" | "discover" | "friends" | "events" | "profile";
 
@@ -72,8 +73,9 @@ export default function BottomNav({ active }: { active: Tab }) {
       }}
         className="mobile-hide"
       >
-        <div style={{ fontWeight: 800, fontSize: "1.25rem", letterSpacing: "-0.02em", padding: "0 8px 24px", color: "#F0EDE8" }}>
-          ThisFriday
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "0 8px 24px" }}>
+          <Image src="/logo.png" alt="ThisFriday" width={28} height={28} style={{ borderRadius: "7px" }} />
+          <span style={{ fontWeight: 800, fontSize: "1.25rem", letterSpacing: "-0.02em", color: "#F0EDE8" }}>ThisFriday</span>
         </div>
         {tabs.map((tab) => {
           const isActive = tab.id === active;

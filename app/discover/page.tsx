@@ -160,10 +160,11 @@ export default function DiscoverPage() {
               const flareColor = event.flare ? (FLARE_COLORS[event.flare] || "#555") : "#555";
               const flareLabel = event.flare ? (FLARE_LABELS[event.flare] || event.flare) : null;
               return (
-                <div key={event.id} style={{
+                <div key={event.id} onClick={() => router.push(`/events/${event.id}`)} style={{
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(255,255,255,0.07)",
                   borderRadius: "14px", overflow: "hidden",
+                  cursor: "pointer",
                 }}>
                   {event.photo_url && (
                     <img src={event.photo_url} alt="" style={{ width: "100%", height: "140px", objectFit: "cover" }} />

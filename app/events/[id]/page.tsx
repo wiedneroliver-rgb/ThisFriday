@@ -1,0 +1,527 @@
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { createClient } from "@/lib/supabase";
+import PageShell from "@/components/PageShell";
+import BottomNav from "@/components/BottomNav";
+
+interface HostedEvent {
+  id: string;
+  host_id: string;
+  title: string;
+  location: string;
+  date: string;
+  flare: string | null;
+  photo_url: string | null;
+  description: string | null;
+  visibility: string | null;
+  created_at: string;
+}
+
+interface Profile {
+  id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+interface Comment {
+  id: string;
+  hosted_event_id: string;
+  user_id: string;
+  body: string;
+  parent_id: string | null;
+  created_at: string;
+  profile?: Profile;
+  replies?: Comment[];
+}
+
+const FLARE_COLORS: Record<string, string> = {
+  house_party: "#c8841a", pregame: "#4a6b20", bar_crawl: "#20506b",
+  darty: "#c4a030", kickback: "#6b4060", function: "#8050c0",
+  concert: "#c04050", club_night: "#5030a0", birthday: "#c45a8a", tailgate: "#6b4020",
+};
+const FLARE_LABELS: Record<string, string> = {
+  house_party: "House Party", pregame: "Pregame", bar_crawl: "Bar Crawl",
+  darty: "Darty", kickback: "Kickback", function: "Function",
+  concert: "Concert", club_night: "Club Night", birthday: "Birthday", tailgate: "Tailgate",
+};
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) +
+    " · " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function timeAgo(dateStr: string) {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+export default function EventDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const eventId = params.id as string;
+
+  const [event, setEvent] = useState<HostedEvent | null>(null);
+  const [host, setHost] = useState<Profile | null>(null);
+  const [goingProfiles, setGoingProfiles] = useState<Profile[]>([]);
+  const [isJoined, setIsJoined] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [commentText, setCommentText] = useState("");
+  const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
+  const [sendingComment, setSendingComment] = useState(false);
+  const [myProfile, setMyProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const commentInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { loadEvent(); }, [eventId]);
+
+  async function loadEvent() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/login"); return; }
+    const userId = user.id.toLowerCase();
+    setCurrentUserId(userId);
+
+    const { data: evtData } = await supabase
+      .from("hosted_events").select("*").eq("id", eventId).single();
+    if (!evtData) { router.push("/feed"); return; }
+    setEvent(evtData);
+
+    // Load host profile
+    const { data: hostData } = await supabase
+      .from("profiles").select("id,display_name,avatar_url").eq("id", evtData.host_id).single();
+    setHost(hostData);
+
+    // Load my profile
+    const { data: myProf } = await supabase
+      .from("profiles").select("id,display_name,avatar_url").eq("id", userId).single();
+    setMyProfile(myProf);
+
+    // Load guests
+    const { data: guestRows } = await supabase
+      .from("hosted_event_guests").select("user_id,status")
+      .eq("hosted_event_id", eventId);
+
+    const acceptedGuests = (guestRows || []).filter((g: { user_id: string; status: string }) => g.status !== "collaborator");
+    const guestIds = acceptedGuests.map((g: { user_id: string }) => g.user_id);
+
+    if (guestIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles").select("id,display_name,avatar_url").in("id", guestIds);
+      setGoingProfiles(profiles || []);
+    }
+
+    const joined = acceptedGuests.some((g: { user_id: string; status: string }) =>
+      g.user_id.toLowerCase() === userId && g.status === "accepted"
+    );
+    setIsJoined(joined);
+    setLoading(false);
+
+    await loadComments(userId);
+  }
+
+  async function loadComments(userId: string) {
+    setLoadingComments(true);
+    const supabase = createClient();
+    const { data: rawComments } = await supabase
+      .from("scene_comments").select("*")
+      .eq("hosted_event_id", eventId)
+      .order("created_at", { ascending: true });
+
+    if (!rawComments || rawComments.length === 0) {
+      setComments([]);
+      setLoadingComments(false);
+      return;
+    }
+
+    const userIds = [...new Set(rawComments.map((c: Comment) => c.user_id))];
+    const { data: profiles } = await supabase
+      .from("profiles").select("id,display_name,avatar_url").in("id", userIds);
+    const profileMap = Object.fromEntries((profiles || []).map((p: Profile) => [p.id, p]));
+
+    const enriched: Comment[] = rawComments.map((c: Comment) => ({
+      ...c,
+      profile: profileMap[c.user_id],
+      replies: [],
+    }));
+
+    const topLevel = enriched.filter((c) => !c.parent_id);
+    const replies = enriched.filter((c) => c.parent_id);
+
+    const threaded = topLevel.map((parent) => ({
+      ...parent,
+      replies: replies.filter((r) => r.parent_id === parent.id),
+    }));
+
+    setComments(threaded);
+    setLoadingComments(false);
+  }
+
+  async function toggleJoin() {
+    if (joining) return;
+    setJoining(true);
+    const supabase = createClient();
+    if (isJoined) {
+      await supabase.from("hosted_event_guests")
+        .delete().eq("hosted_event_id", eventId).eq("user_id", currentUserId);
+      setIsJoined(false);
+      setGoingProfiles((prev) => prev.filter((p) => p.id !== currentUserId));
+    } else {
+      await supabase.rpc("join_scene", { p_event_id: eventId, p_user_id: currentUserId });
+      setIsJoined(true);
+      if (myProfile) setGoingProfiles((prev) => [...prev, myProfile]);
+    }
+    setJoining(false);
+  }
+
+  async function postComment() {
+    if (!commentText.trim() || sendingComment) return;
+    setSendingComment(true);
+    const supabase = createClient();
+    const { data } = await supabase.from("scene_comments").insert({
+      hosted_event_id: eventId,
+      user_id: currentUserId,
+      body: commentText.trim(),
+      parent_id: replyingTo?.id ?? null,
+    }).select().single();
+
+    if (data) {
+      const newComment: Comment = { ...data, profile: myProfile ?? undefined, replies: [] };
+      if (replyingTo) {
+        setComments((prev) => prev.map((c) =>
+          c.id === replyingTo.id
+            ? { ...c, replies: [...(c.replies || []), newComment] }
+            : c
+        ));
+      } else {
+        setComments((prev) => [...prev, newComment]);
+      }
+    }
+    setCommentText("");
+    setReplyingTo(null);
+    setSendingComment(false);
+  }
+
+  if (loading || !event) {
+    return (
+      <div style={{ background: "#080808", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(240,237,232,0.3)" }}>
+        Loading...
+      </div>
+    );
+  }
+
+  const isOwn = event.host_id === currentUserId;
+  const flareColor = event.flare ? (FLARE_COLORS[event.flare] || "#555") : null;
+  const flareLabel = event.flare ? (FLARE_LABELS[event.flare] || event.flare) : null;
+  const visLabel = event.visibility === "public" ? "Public" : event.visibility === "semi_public" ? "Friends" : "Private";
+
+  return (
+    <PageShell>
+      <div style={{ background: "#080808", minHeight: "100vh", color: "#F0EDE8" }}>
+        {/* Hero */}
+        <div style={{ position: "relative" }}>
+          {event.photo_url ? (
+            <>
+              <img
+                src={event.photo_url}
+                alt={event.title}
+                style={{ width: "100%", aspectRatio: "4/3", maxHeight: "420px", objectFit: "cover", display: "block" }}
+              />
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 40%, rgba(0,0,0,0.7) 70%, rgba(0,0,0,0.98) 100%)",
+              }} />
+            </>
+          ) : (
+            <div style={{ height: "200px", background: "rgba(255,255,255,0.03)" }} />
+          )}
+
+          {/* Back button */}
+          <button
+            onClick={() => router.back()}
+            style={{
+              position: "absolute", top: "52px", left: "16px",
+              width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              color: "#fff", cursor: "pointer", display: "flex",
+              alignItems: "center", justifyContent: "center", fontSize: "1rem",
+            }}
+          >
+            ‹
+          </button>
+
+          {/* Title overlay at bottom of hero */}
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0,
+            padding: "16px 20px 20px",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+              {event.visibility && (
+                <span style={{
+                  background: "rgba(255,255,255,0.12)", backdropFilter: "blur(4px)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: "10px", padding: "3px 8px",
+                  fontSize: "0.7rem", color: "rgba(255,255,255,0.7)",
+                }}>
+                  {visLabel}
+                </span>
+              )}
+              {flareLabel && flareColor && (
+                <span style={{
+                  background: flareColor + "44", color: flareColor,
+                  border: `1px solid ${flareColor}66`,
+                  borderRadius: "10px", padding: "3px 8px",
+                  fontSize: "0.7rem", fontWeight: 700,
+                }}>
+                  {flareLabel}
+                </span>
+              )}
+            </div>
+            <h1 style={{
+              fontWeight: 900, fontSize: "clamp(1.6rem, 5vw, 2rem)",
+              letterSpacing: "-0.03em", margin: "0 0 8px",
+              color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.8)",
+              lineHeight: 1.1,
+            }}>
+              {event.title}
+            </h1>
+            {host && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%",
+                  background: "rgba(255,255,255,0.2)", overflow: "hidden",
+                }}>
+                  {host.avatar_url && <img src={host.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                </div>
+                <span style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.55)" }}>
+                  by {host.display_name || "Someone"}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Info section */}
+        <div style={{ padding: "20px 20px 0" }}>
+          {/* Location + Date */}
+          <div style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.07)",
+            borderRadius: "14px", padding: "14px 16px", marginBottom: "16px",
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: event.location ? "12px" : 0 }}>
+              <span style={{ fontSize: "1.1rem", flexShrink: 0 }}>📍</span>
+              <div>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: "0.95rem" }}>{event.location}</p>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+              <span style={{ fontSize: "1.1rem", flexShrink: 0 }}>🗓</span>
+              <p style={{ margin: 0, fontSize: "0.9rem", color: "rgba(240,237,232,0.7)" }}>{formatDate(event.date)}</p>
+            </div>
+          </div>
+
+          {/* Going count + avatars */}
+          {goingProfiles.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              <p style={{ fontSize: "0.75rem", color: "rgba(240,237,232,0.35)", letterSpacing: "0.08em", margin: "0 0 10px", textTransform: "uppercase" }}>
+                Going · {goingProfiles.length}
+              </p>
+              <div style={{ display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "4px" }}>
+                {goingProfiles.map((p) => (
+                  <div key={p.id} style={{ flexShrink: 0, textAlign: "center" }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: "50%",
+                      background: "rgba(255,255,255,0.1)", overflow: "hidden", marginBottom: "4px",
+                    }}>
+                      {p.avatar_url && <img src={p.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.65rem", color: "rgba(240,237,232,0.45)", maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.display_name?.split(" ")[0] || "?"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Description */}
+          {event.description && (
+            <div style={{ marginBottom: "20px" }}>
+              <p style={{ fontSize: "0.75rem", color: "rgba(240,237,232,0.35)", letterSpacing: "0.08em", margin: "0 0 8px", textTransform: "uppercase" }}>About</p>
+              <p style={{ margin: 0, fontSize: "0.9rem", color: "rgba(240,237,232,0.7)", lineHeight: 1.55 }}>
+                {event.description}
+              </p>
+            </div>
+          )}
+
+          {/* Comments */}
+          <div style={{ marginBottom: "120px" }}>
+            <p style={{ fontSize: "0.75rem", color: "rgba(240,237,232,0.35)", letterSpacing: "0.08em", margin: "0 0 12px", textTransform: "uppercase" }}>
+              Comments
+            </p>
+
+            {loadingComments ? (
+              <p style={{ color: "rgba(240,237,232,0.3)", fontSize: "0.85rem" }}>Loading...</p>
+            ) : comments.length === 0 ? (
+              <p style={{ color: "rgba(240,237,232,0.25)", fontSize: "0.85rem" }}>No comments yet. Be the first!</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+                {comments.map((comment) => (
+                  <CommentItem
+                    key={comment.id}
+                    comment={comment}
+                    onReply={() => {
+                      setReplyingTo(comment);
+                      commentInputRef.current?.focus();
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Fixed bottom bar */}
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0,
+          background: "rgba(8,8,8,0.97)",
+          borderTop: "1px solid rgba(255,255,255,0.07)",
+          backdropFilter: "blur(16px)",
+          padding: "10px 16px",
+          paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+          zIndex: 40,
+        }}>
+          {replyingTo && (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              marginBottom: "8px", padding: "6px 10px",
+              background: "rgba(255,255,255,0.05)", borderRadius: "8px",
+            }}>
+              <span style={{ fontSize: "0.78rem", color: "rgba(240,237,232,0.45)" }}>
+                Replying to {replyingTo.profile?.display_name || "someone"}
+              </span>
+              <button onClick={() => setReplyingTo(null)} style={{
+                background: "none", border: "none", color: "rgba(240,237,232,0.4)",
+                cursor: "pointer", fontSize: "1rem", lineHeight: 1,
+              }}>×</button>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <input
+              ref={commentInputRef}
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") postComment(); }}
+              placeholder="Comment..."
+              style={{
+                flex: 1, background: "rgba(255,255,255,0.07)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "22px", padding: "10px 16px",
+                color: "#F0EDE8", fontSize: "0.9rem", outline: "none",
+              }}
+            />
+            {commentText.trim() && (
+              <button
+                onClick={postComment}
+                disabled={sendingComment}
+                style={{
+                  width: 38, height: 38, borderRadius: "50%",
+                  background: "#F0EDE8", border: "none",
+                  color: "#080808", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "1.1rem", flexShrink: 0,
+                  opacity: sendingComment ? 0.5 : 1,
+                }}
+              >
+                ↑
+              </button>
+            )}
+            {!isOwn && (
+              <button
+                onClick={toggleJoin}
+                disabled={joining}
+                style={{
+                  background: isJoined ? "rgba(255,255,255,0.1)" : "#F0EDE8",
+                  color: isJoined ? "#F0EDE8" : "#080808",
+                  border: isJoined ? "1px solid rgba(255,255,255,0.15)" : "none",
+                  borderRadius: "22px", padding: "10px 18px",
+                  fontWeight: 700, fontSize: "0.85rem",
+                  cursor: joining ? "not-allowed" : "pointer",
+                  opacity: joining ? 0.6 : 1, flexShrink: 0,
+                }}
+              >
+                {isJoined ? "Going ✓" : "I'm going"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <BottomNav active="feed" />
+      </div>
+    </PageShell>
+  );
+}
+
+function CommentItem({ comment, onReply, depth = 0 }: {
+  comment: Comment;
+  onReply: () => void;
+  depth?: number;
+}) {
+  return (
+    <div style={{ marginLeft: depth > 0 ? "32px" : 0 }}>
+      <div style={{
+        display: "flex", gap: "10px",
+        padding: "10px 0",
+        borderBottom: "1px solid rgba(255,255,255,0.04)",
+      }}>
+        <div style={{
+          width: 30, height: 30, borderRadius: "50%",
+          background: "rgba(255,255,255,0.1)",
+          overflow: "hidden", flexShrink: 0,
+        }}>
+          {comment.profile?.avatar_url && (
+            <img src={comment.profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginBottom: "3px" }}>
+            <span style={{ fontWeight: 600, fontSize: "0.82rem" }}>
+              {comment.profile?.display_name || "Someone"}
+            </span>
+            <span style={{ color: "rgba(240,237,232,0.3)", fontSize: "0.72rem" }}>
+              {timeAgo(comment.created_at)}
+            </span>
+          </div>
+          <p style={{ margin: 0, fontSize: "0.88rem", color: "rgba(240,237,232,0.8)", lineHeight: 1.4 }}>
+            {comment.body}
+          </p>
+          {depth === 0 && (
+            <button
+              onClick={onReply}
+              style={{
+                background: "none", border: "none",
+                color: "rgba(240,237,232,0.3)", fontSize: "0.72rem",
+                cursor: "pointer", padding: "4px 0 0", marginTop: "2px",
+              }}
+            >
+              Reply
+            </button>
+          )}
+        </div>
+      </div>
+      {comment.replies?.map((reply) => (
+        <CommentItem key={reply.id} comment={reply} onReply={onReply} depth={1} />
+      ))}
+    </div>
+  );
+}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 import PageShell from "@/components/PageShell";
@@ -180,9 +181,10 @@ export default function FeedPage() {
           padding: "16px 16px 12px",
           borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}>
-          <h1 style={{ fontWeight: 800, fontSize: "1.5rem", letterSpacing: "-0.02em", margin: 0 }}>
-            ThisFriday
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Image src="/logo.png" alt="" width={30} height={30} style={{ borderRadius: "8px" }} />
+            <h1 style={{ fontWeight: 800, fontSize: "1.5rem", letterSpacing: "-0.02em", margin: 0 }}>ThisFriday</h1>
+          </div>
         </div>
 
         {/* Feed */}
@@ -204,6 +206,7 @@ export default function FeedPage() {
                 currentUserId={currentUserId}
                 onJoin={() => toggleJoin(item)}
                 joining={joiningId === item.event.id}
+                onTap={() => router.push(`/events/${item.event.id}`)}
               />
             ))
           )}
@@ -215,113 +218,201 @@ export default function FeedPage() {
   );
 }
 
-function FeedCard({ item, currentUserId, onJoin, joining }: {
+function FeedCard({ item, currentUserId, onJoin, joining, onTap }: {
   item: FeedItem;
   currentUserId: string;
   onJoin: () => void;
   joining: boolean;
+  onTap: () => void;
 }) {
   const { event, host, goingCount, isJoined } = item;
   const isOwn = event.host_id === currentUserId;
   const flareColor = event.flare ? (FLARE_COLORS[event.flare] || "#555") : "#555";
   const flareLabel = event.flare ? (FLARE_LABELS[event.flare] || event.flare) : null;
+  const hasPhoto = !!event.photo_url;
 
   return (
-    <div style={{
-      margin: "0 12px 12px",
-      background: "rgba(255,255,255,0.04)",
-      borderRadius: "16px",
-      overflow: "hidden",
-      border: "1px solid rgba(255,255,255,0.07)",
-    }}>
-      {/* Photo */}
-      {event.photo_url && (
-        <img
-          src={event.photo_url}
-          alt={event.title}
-          style={{ width: "100%", height: "180px", objectFit: "cover", display: "block" }}
-        />
-      )}
-
-      <div style={{ padding: "14px" }}>
-        {/* Host row */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+    <div
+      onClick={onTap}
+      style={{
+        margin: "0 12px 14px",
+        borderRadius: "18px",
+        overflow: "hidden",
+        border: "1px solid rgba(255,255,255,0.07)",
+        cursor: "pointer",
+        position: "relative",
+        background: hasPhoto ? "transparent" : "rgba(255,255,255,0.04)",
+      }}
+    >
+      {hasPhoto ? (
+        /* Photo card: full image with gradient overlay + all details on top */
+        <div style={{ position: "relative" }}>
+          <img
+            src={event.photo_url!}
+            alt={event.title}
+            style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }}
+          />
+          {/* Dark gradient from bottom */}
           <div style={{
-            width: 32, height: 32, borderRadius: "50%",
-            background: "rgba(255,255,255,0.1)",
-            overflow: "hidden", flexShrink: 0,
+            position: "absolute", inset: 0,
+            background: "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.0) 35%, rgba(0,0,0,0.6) 65%, rgba(0,0,0,0.92) 100%)",
+          }} />
+
+          {/* Top row: host + time + flare */}
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0,
+            display: "flex", alignItems: "center", gap: "8px",
+            padding: "12px 14px",
           }}>
-            {host?.avatar_url && (
-              <img src={host.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            )}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: "50%",
+              background: "rgba(255,255,255,0.15)",
+              overflow: "hidden", flexShrink: 0,
+              border: "1.5px solid rgba(255,255,255,0.25)",
+            }}>
+              {host?.avatar_url && (
+                <img src={host.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              )}
+            </div>
+            <span style={{ fontWeight: 600, fontSize: "0.8rem", color: "#fff", flex: 1, textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
               {host?.display_name || "Someone"}
             </span>
-            <span style={{ color: "rgba(240,237,232,0.4)", fontSize: "0.8rem" }}>
-              {" "}· {timeAgo(event.created_at)}
+            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.75rem", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+              {timeAgo(event.created_at)}
             </span>
-          </div>
-          {flareLabel && (
-            <span style={{
-              background: flareColor + "33",
-              color: flareColor,
-              border: `1px solid ${flareColor}66`,
-              borderRadius: "20px",
-              padding: "3px 8px",
-              fontSize: "0.7rem",
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}>
-              {flareLabel}
-            </span>
-          )}
-        </div>
-
-        {/* Title */}
-        <h3 style={{ fontWeight: 700, fontSize: "1.05rem", margin: "0 0 4px", letterSpacing: "-0.01em" }}>
-          {event.title}
-        </h3>
-
-        {/* Location + time */}
-        <p style={{ color: "rgba(240,237,232,0.5)", fontSize: "0.82rem", margin: "0 0 12px" }}>
-          {event.location} · {formatEventTime(event.date)}
-        </p>
-
-        {/* Description */}
-        {event.description && (
-          <p style={{ color: "rgba(240,237,232,0.7)", fontSize: "0.85rem", margin: "0 0 12px", lineHeight: 1.4 }}>
-            {event.description}
-          </p>
-        )}
-
-        {/* Footer */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ color: "rgba(240,237,232,0.4)", fontSize: "0.8rem" }}>
-            {goingCount > 0 ? `${goingCount} going` : "Be the first"}
-          </span>
-          {!isOwn && (
-            <button
-              onClick={onJoin}
-              disabled={joining}
-              style={{
-                background: isJoined ? "rgba(255,255,255,0.08)" : "#F0EDE8",
-                color: isJoined ? "#F0EDE8" : "#080808",
-                border: isJoined ? "1px solid rgba(255,255,255,0.15)" : "none",
+            {flareLabel && (
+              <span style={{
+                background: flareColor + "55",
+                color: "#fff",
+                border: `1px solid ${flareColor}88`,
                 borderRadius: "20px",
-                padding: "7px 16px",
+                padding: "2px 8px",
+                fontSize: "0.65rem",
                 fontWeight: 700,
-                fontSize: "0.82rem",
-                cursor: joining ? "not-allowed" : "pointer",
-                opacity: joining ? 0.6 : 1,
-              }}
-            >
-              {isJoined ? "Going ✓" : "I'm going"}
-            </button>
-          )}
+                backdropFilter: "blur(4px)",
+              }}>
+                {flareLabel}
+              </span>
+            )}
+          </div>
+
+          {/* Bottom overlay: title + location + date + actions */}
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0,
+            padding: "12px 14px 14px",
+          }}>
+            <h3 style={{
+              fontWeight: 800, fontSize: "1.35rem", margin: "0 0 4px",
+              color: "#fff", letterSpacing: "-0.02em",
+              textShadow: "0 2px 8px rgba(0,0,0,0.7)",
+              lineHeight: 1.15,
+            }}>
+              {event.title}
+            </h3>
+            <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "0.78rem", margin: "0 0 10px", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+              📍 {event.location} · {formatEventTime(event.date)}
+            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.78rem" }}>
+                {goingCount > 0 ? `${goingCount} going` : "Be the first"}
+              </span>
+              {!isOwn && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onJoin(); }}
+                  disabled={joining}
+                  style={{
+                    background: isJoined ? "rgba(255,255,255,0.15)" : "#F0EDE8",
+                    color: isJoined ? "#F0EDE8" : "#080808",
+                    border: isJoined ? "1px solid rgba(255,255,255,0.25)" : "none",
+                    borderRadius: "20px",
+                    padding: "6px 16px",
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    cursor: joining ? "not-allowed" : "pointer",
+                    opacity: joining ? 0.6 : 1,
+                    backdropFilter: "blur(4px)",
+                  }}
+                >
+                  {isJoined ? "Going ✓" : "I'm going"}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Text-only card: no photo */
+        <div style={{ padding: "14px" }}>
+          {/* Host row */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%",
+              background: "rgba(255,255,255,0.1)",
+              overflow: "hidden", flexShrink: 0,
+            }}>
+              {host?.avatar_url && (
+                <img src={host.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              )}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>
+                {host?.display_name || "Someone"}
+              </span>
+              <span style={{ color: "rgba(240,237,232,0.4)", fontSize: "0.8rem" }}>
+                {" "}· {timeAgo(event.created_at)}
+              </span>
+            </div>
+            {flareLabel && (
+              <span style={{
+                background: flareColor + "33",
+                color: flareColor,
+                border: `1px solid ${flareColor}66`,
+                borderRadius: "20px",
+                padding: "3px 8px",
+                fontSize: "0.7rem",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}>
+                {flareLabel}
+              </span>
+            )}
+          </div>
+          <h3 style={{ fontWeight: 800, fontSize: "1.4rem", margin: "0 0 4px", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+            {event.title}
+          </h3>
+          <p style={{ color: "rgba(240,237,232,0.5)", fontSize: "0.82rem", margin: "0 0 12px" }}>
+            {event.location} · {formatEventTime(event.date)}
+          </p>
+          {event.description && (
+            <p style={{ color: "rgba(240,237,232,0.7)", fontSize: "0.85rem", margin: "0 0 12px", lineHeight: 1.4 }}>
+              {event.description}
+            </p>
+          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ color: "rgba(240,237,232,0.4)", fontSize: "0.8rem" }}>
+              {goingCount > 0 ? `${goingCount} going` : "Be the first"}
+            </span>
+            {!isOwn && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onJoin(); }}
+                disabled={joining}
+                style={{
+                  background: isJoined ? "rgba(255,255,255,0.08)" : "#F0EDE8",
+                  color: isJoined ? "#F0EDE8" : "#080808",
+                  border: isJoined ? "1px solid rgba(255,255,255,0.15)" : "none",
+                  borderRadius: "20px",
+                  padding: "7px 16px",
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  cursor: joining ? "not-allowed" : "pointer",
+                  opacity: joining ? 0.6 : 1,
+                }}
+              >
+                {isJoined ? "Going ✓" : "I'm going"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,11 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 
 const FALLBACK = {
   title: "ThisFriday",
-  description: "Add them as a friend on ThisFriday",
+  description: "See what's happening tonight.",
 };
 
-export async function generateMetadata({ params }: { params: Promise<{ userId: string }> }) {
-  const { userId } = await params;
+export async function generateMetadata({ params }: { params: Promise<{ eventId: string }> }) {
+  const { eventId } = await params;
 
   let title = FALLBACK.title;
   let description = FALLBACK.description;
@@ -17,15 +17,15 @@ export async function generateMetadata({ params }: { params: Promise<{ userId: s
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("display_name")
-      .eq("id", userId)
+    const { data: event } = await supabase
+      .from("events")
+      .select("title, description")
+      .eq("id", eventId)
       .single();
 
-    if (profile?.display_name) {
-      title = `${profile.display_name} on ThisFriday`;
-      description = `Add ${profile.display_name} as a friend`;
+    if (event?.title) {
+      title = event.title;
+      description = event.description ?? `Check out ${event.title} on ThisFriday`;
     }
   } catch {
     // supabase unreachable — use fallback
@@ -48,6 +48,6 @@ export async function generateMetadata({ params }: { params: Promise<{ userId: s
   };
 }
 
-export default function UserLayout({ children }: { children: React.ReactNode }) {
+export default function EventLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

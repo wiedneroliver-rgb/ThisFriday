@@ -10,16 +10,17 @@ export async function generateMetadata({ params }: { params: Promise<{ sceneId: 
 
   let title = FALLBACK.title;
   let description = FALLBACK.description;
+  let image = "https://thisfridayapp.com/logo.png";
 
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
     const { data: scene } = await supabase
       .from("hosted_events")
-      .select("title")
+      .select("title, photo_url")
       .eq("id", sceneId)
       .single();
 
@@ -27,8 +28,11 @@ export async function generateMetadata({ params }: { params: Promise<{ sceneId: 
       title = scene.title;
       description = `You've been invited to ${scene.title}`;
     }
+    if (scene?.photo_url) {
+      image = scene.photo_url;
+    }
   } catch {
-    // env vars missing or Supabase unreachable — use fallback
+    // supabase unreachable — use fallback
   }
 
   return {
@@ -37,13 +41,13 @@ export async function generateMetadata({ params }: { params: Promise<{ sceneId: 
     openGraph: {
       title,
       description,
-      images: [{ url: "https://thisfridayapp.com/logo.png", width: 1200, height: 1200 }],
+      images: [{ url: image, width: 1200, height: 630 }],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
-      images: ["https://thisfridayapp.com/logo.png"],
+      images: [image],
     },
   };
 }

@@ -12,15 +12,22 @@ export default function ScenePage() {
   const params = useParams();
   const sceneId = params.sceneId as string;
   const [isDesktop, setIsDesktop] = useState(false);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isMobile = isIOS;
+    const ua = navigator.userAgent;
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isIAB = /Instagram|FBAN|FBAV|FB_IAB/i.test(ua);
 
-    if (!isMobile) {
+    if (!isIOS) {
       setIsDesktop(true);
+      return;
+    }
+
+    if (isIAB) {
+      setIsInAppBrowser(true);
       return;
     }
 
@@ -150,6 +157,35 @@ export default function ScenePage() {
                   minHeight: "160px",
                 }}
               />
+            </>
+          ) : isInAppBrowser ? (
+            /* ── In-app browser (Instagram/Facebook) ── */
+            <>
+              <p
+                style={{
+                  fontFamily: "var(--font-inter)",
+                  fontWeight: 700,
+                  fontSize: "1.25rem",
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.2,
+                  color: "#F0EDE8",
+                  margin: 0,
+                }}
+              >
+                Open in Safari to continue
+              </p>
+              <p
+                style={{
+                  fontFamily: "var(--font-inter)",
+                  fontWeight: 300,
+                  fontSize: "0.9375rem",
+                  color: "rgba(240,237,232,0.5)",
+                  margin: 0,
+                }}
+              >
+                Tap <strong style={{ color: "#F0EDE8" }}>···</strong> then{" "}
+                <strong style={{ color: "#F0EDE8" }}>Open in Browser</strong>
+              </p>
             </>
           ) : (
             /* ── Mobile loading state ── */

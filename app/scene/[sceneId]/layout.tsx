@@ -1,23 +1,35 @@
 import { createClient } from "@supabase/supabase-js";
 
+const FALLBACK = {
+  title: "ThisFriday",
+  description: "You've been invited to a plan on ThisFriday",
+};
+
 export async function generateMetadata({ params }: { params: Promise<{ sceneId: string }> }) {
   const { sceneId } = await params;
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  let title = FALLBACK.title;
+  let description = FALLBACK.description;
 
-  const { data: scene } = await supabase
-    .from("hosted_events")
-    .select("title")
-    .eq("id", sceneId)
-    .single();
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-  const title = scene?.title ?? "ThisFriday";
-  const description = scene?.title
-    ? `You've been invited to ${scene.title}`
-    : "You've been invited to a plan on ThisFriday";
+    const { data: scene } = await supabase
+      .from("hosted_events")
+      .select("title")
+      .eq("id", sceneId)
+      .single();
+
+    if (scene?.title) {
+      title = scene.title;
+      description = `You've been invited to ${scene.title}`;
+    }
+  } catch {
+    // env vars missing or Supabase unreachable — use fallback
+  }
 
   return {
     title,

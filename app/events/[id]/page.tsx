@@ -17,7 +17,7 @@ interface HostedEvent {
   id: string;
   host_id: string;
   title: string;
-  location: string;
+  location: string | null;
   date: string;
   end_time: string | null;
   flare: string | null;

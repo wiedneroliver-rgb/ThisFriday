@@ -507,7 +507,7 @@ export default function EventDetailPage() {
               </div>
             )}
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <ShareButton url={`https://thisfridayapp.com/post/${event.id}`} title={event.title} compact />
+              <ShareButton url={`https://thisfridayapp.com/post/${event.id}`} title={event.title} />
               <input
                 ref={commentInputRef}
                 value={commentText}

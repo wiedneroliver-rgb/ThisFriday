@@ -477,7 +477,7 @@ export default function EventDetailPage() {
             </div>
           </div>
         ) : tab === "photos" ? (
-          <ScenePhotos sceneId={eventId} currentUserId={userId!} />
+          <ScenePhotos sceneId={eventId} currentUserId={userId!} isHost={canEdit} />
         ) : (
           <MusicQueue sceneId={eventId} currentUserId={userId!} isHost={canEdit} />
         )}

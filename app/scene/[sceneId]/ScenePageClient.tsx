@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Script from "next/script";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createAuthClient } from "@/lib/supabase";
 
 const IOS_STORE = "https://apps.apple.com/ca/app/thisfriday/id6760683323";
 
@@ -30,6 +32,7 @@ type Scene = {
 type Environment = "ios-iab" | "ios" | "desktop";
 
 export default function ScenePageClient({ sceneId }: { sceneId: string }) {
+  const router = useRouter();
   const [env, setEnv] = useState<Environment | null>(null);
   const [scene, setScene] = useState<Scene | null>(null);
   const [hostName, setHostName] = useState<string | null>(null);
@@ -38,13 +41,24 @@ export default function ScenePageClient({ sceneId }: { sceneId: string }) {
   const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const ua = navigator.userAgent;
-    const isIOS = /iPhone|iPad|iPod/i.test(ua);
-    const isIAB = /Instagram|FBAN|FBAV|FB_IAB/i.test(ua);
-    if (!isIOS) setEnv("desktop");
-    else if (isIAB) setEnv("ios-iab");
-    else setEnv("ios");
-  }, []);
+    // Redirect logged-in web users directly to the scene detail page
+    async function checkAuth() {
+      const supabase = createAuthClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        router.replace(`/events/${sceneId}`);
+        return;
+      }
+      const ua = navigator.userAgent;
+      const isIOS = /iPhone|iPad|iPod/i.test(ua);
+      const isIAB = /Instagram|FBAN|FBAV|FB_IAB/i.test(ua);
+      if (!isIOS) setEnv("desktop");
+      else if (isIAB) setEnv("ios-iab");
+      else setEnv("ios");
+    }
+    checkAuth();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneId]);
 
   useEffect(() => {
     const supabase = createClient(

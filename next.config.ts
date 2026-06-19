@@ -32,6 +32,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Deep link routes now have real pages — no rewrites needed.
+  // /scene/:id → app/scene/[sceneId] (redirects logged-in users to /events/:id)
+  // /post/:id  → app/post/[id]       (redirects to /events/:id)
+  // /event/:id → app/event/[id]      (Eventbrite event detail)
+  // /user/:id  → app/user/[id]       (redirects to /profile/:id)
+  async rewrites() {
+    return [
+      { source: "/invite", destination: "/" },
+    ];
+  },
 };
 
 export default nextConfig;

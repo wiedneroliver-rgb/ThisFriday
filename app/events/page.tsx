@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 import PageShell from "@/components/PageShell";
+import PhotoViewer from "@/components/PhotoViewer";
 
 interface HostedEvent {
   id: string;
@@ -16,6 +17,39 @@ interface HostedEvent {
   photo_url: string | null;
   description: string | null;
   visibility: string | null;
+  created_at: string;
+}
+
+interface ScenePhoto {
+  id: string;
+  scene_id: string;
+  photo_url: string;
+  folder: string;
+  created_at: string;
+}
+
+interface EventPhoto {
+  id: string;
+  event_id: number;
+  photo_url: string;
+  folder: string;
+  created_at: string;
+}
+
+interface AlbumItem {
+  id: string;
+  title: string;
+  coverUrl: string | null;
+  photoCount: number;
+  date: string;
+  type: "scene" | "event";
+  sourceId: string;
+}
+
+interface GalleryPhoto {
+  id: string;
+  photo_url: string;
+  source_type: string;
   created_at: string;
 }
 
@@ -44,11 +78,23 @@ export default function EventsPage() {
   const router = useRouter();
   const [hosted, setHosted] = useState<HostedEvent[]>([]);
   const [going, setGoing] = useState<HostedEvent[]>([]);
+  const [albums, setAlbums] = useState<AlbumItem[]>([]);
+  const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const [albumsLoading, setAlbumsLoading] = useState(false);
+  const [tab, setTab] = useState<"upcoming" | "past" | "albums">("upcoming");
   const [currentUserId, setCurrentUserId] = useState("");
+  const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   useEffect(() => { loadEvents(); }, []);
+
+  useEffect(() => {
+    if (tab === "albums" && currentUserId && albums.length === 0 && !albumsLoading) {
+      loadAlbums(currentUserId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, currentUserId]);
 
   async function loadEvents() {
     const supabase = createClient();
@@ -82,6 +128,119 @@ export default function EventsPage() {
     setLoading(false);
   }
 
+  async function loadAlbums(userId: string) {
+    setAlbumsLoading(true);
+    const supabase = createClient();
+
+    // Get all scene IDs user is part of (hosted or attended)
+    const { data: guestRows } = await supabase
+      .from("hosted_event_guests").select("hosted_event_id")
+      .eq("user_id", userId).eq("status", "accepted");
+    const guestSceneIds = (guestRows || []).map((r: { hosted_event_id: string }) => r.hosted_event_id);
+
+    const { data: hostedScenes } = await supabase
+      .from("hosted_events").select("id,title,date,photo_url")
+      .eq("host_id", userId);
+    const hostedSceneIds = (hostedScenes || []).map((e: { id: string }) => e.id);
+
+    const allSceneIds = [...new Set([...hostedSceneIds, ...guestSceneIds])];
+
+    const albumItems: AlbumItem[] = [];
+
+    // Scene photos
+    if (allSceneIds.length > 0) {
+      const { data: scenePhotos } = await supabase
+        .from("scene_photos").select("id,scene_id,photo_url,created_at")
+        .in("scene_id", allSceneIds)
+        .order("created_at", { ascending: false });
+
+      // Group by scene
+      const byScene: Record<string, ScenePhoto[]> = {};
+      for (const p of (scenePhotos || []) as ScenePhoto[]) {
+        if (!byScene[p.scene_id]) byScene[p.scene_id] = [];
+        byScene[p.scene_id].push(p);
+      }
+
+      const hostedSceneMap: Record<string, { title: string; date: string; photo_url: string | null }> = {};
+      for (const s of (hostedScenes || [])) {
+        hostedSceneMap[s.id] = { title: s.title, date: s.date, photo_url: s.photo_url };
+      }
+
+      // Fetch missing scene info
+      const unknownIds = allSceneIds.filter(id => !hostedSceneMap[id] && byScene[id]);
+      if (unknownIds.length > 0) {
+        const { data: extraScenes } = await supabase
+          .from("hosted_events").select("id,title,date,photo_url")
+          .in("id", unknownIds);
+        for (const s of (extraScenes || [])) {
+          hostedSceneMap[s.id] = { title: s.title, date: s.date, photo_url: s.photo_url };
+        }
+      }
+
+      for (const [sceneId, photos] of Object.entries(byScene)) {
+        const sceneInfo = hostedSceneMap[sceneId];
+        if (!sceneInfo) continue;
+        albumItems.push({
+          id: `scene-${sceneId}`,
+          title: sceneInfo.title,
+          coverUrl: photos[0]?.photo_url || sceneInfo.photo_url,
+          photoCount: photos.length,
+          date: sceneInfo.date,
+          type: "scene",
+          sourceId: sceneId,
+        });
+      }
+    }
+
+    // Event photos (Eventbrite events user uploaded to)
+    const { data: eventPhotos } = await supabase
+      .from("event_photos").select("id,event_id,photo_url,created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if ((eventPhotos || []).length > 0) {
+      const byEvent: Record<number, EventPhoto[]> = {};
+      for (const p of (eventPhotos || []) as EventPhoto[]) {
+        if (!byEvent[p.event_id]) byEvent[p.event_id] = [];
+        byEvent[p.event_id].push(p);
+      }
+
+      const eventIds = Object.keys(byEvent).map(Number);
+      const { data: events } = await supabase
+        .from("events").select("id,title,date")
+        .in("id", eventIds);
+      const eventMap: Record<number, { title: string; date: string }> = {};
+      for (const e of (events || [])) eventMap[e.id] = e;
+
+      for (const [eventId, photos] of Object.entries(byEvent)) {
+        const evt = eventMap[Number(eventId)];
+        if (!evt) continue;
+        albumItems.push({
+          id: `event-${eventId}`,
+          title: evt.title,
+          coverUrl: photos[0]?.photo_url || null,
+          photoCount: photos.length,
+          date: evt.date,
+          type: "event",
+          sourceId: eventId,
+        });
+      }
+    }
+
+    // Sort by date desc
+    albumItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setAlbums(albumItems);
+
+    // Saved gallery
+    const { data: gallery } = await supabase
+      .from("user_gallery").select("id,photo_url,source_type,created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    setGalleryPhotos(gallery || []);
+
+    setAlbumsLoading(false);
+  }
+
   async function deleteEvent(eventId: string) {
     if (!confirm("Delete this event?")) return;
     const supabase = createClient();
@@ -106,7 +265,7 @@ export default function EventsPage() {
           My Events
         </h1>
         <div style={{ display: "flex", gap: "0" }}>
-          {(["upcoming", "past"] as const).map((t) => (
+          {(["upcoming", "past", "albums"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -126,7 +285,24 @@ export default function EventsPage() {
       </div>
 
       <div style={{ padding: "12px 16px", paddingBottom: "80px" }}>
-        {loading ? (
+        {tab === "albums" ? (
+          albumsLoading ? (
+            <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(240,237,232,0.3)" }}>Loading...</div>
+          ) : (
+            <AlbumsTab
+              albums={albums}
+              galleryPhotos={galleryPhotos}
+              onAlbumTap={(album) => {
+                if (album.type === "scene") router.push(`/events/${album.sourceId}`);
+                else router.push(`/event/${album.sourceId}`);
+              }}
+              onPhotoTap={(photos, index) => {
+                setViewerPhotos(photos);
+                setViewerIndex(index);
+              }}
+            />
+          )
+        ) : loading ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(240,237,232,0.3)" }}>Loading...</div>
         ) : displayed.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(240,237,232,0.3)" }}>
@@ -139,32 +315,133 @@ export default function EventsPage() {
               event={event}
               isOwn={event.host_id === currentUserId}
               onDelete={() => deleteEvent(event.id)}
+              onTap={() => router.push(`/events/${event.id}`)}
             />
           ))
         )}
       </div>
 
       <BottomNav active="events" />
+
+      {viewerPhotos.length > 0 && (
+        <PhotoViewer
+          photos={viewerPhotos}
+          initialIndex={viewerIndex}
+          onClose={() => setViewerPhotos([])}
+        />
+      )}
     </div></PageShell>
   );
 }
 
-function EventRow({ event, isOwn, onDelete }: {
+function AlbumsTab({
+  albums,
+  galleryPhotos,
+  onAlbumTap,
+  onPhotoTap,
+}: {
+  albums: AlbumItem[];
+  galleryPhotos: GalleryPhoto[];
+  onAlbumTap: (album: AlbumItem) => void;
+  onPhotoTap: (photos: string[], index: number) => void;
+}) {
+  return (
+    <div>
+      {/* Albums */}
+      {albums.length > 0 && (
+        <div style={{ marginBottom: "28px" }}>
+          <p style={{ fontSize: "0.72rem", color: "rgba(240,237,232,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 12px" }}>
+            Albums
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
+            {albums.map((album) => (
+              <div
+                key={album.id}
+                onClick={() => onAlbumTap(album)}
+                style={{
+                  borderRadius: "12px", overflow: "hidden",
+                  cursor: "pointer", position: "relative",
+                  aspectRatio: "1",
+                  background: "rgba(255,255,255,0.05)",
+                }}
+              >
+                {album.coverUrl ? (
+                  <img src={album.coverUrl} alt={album.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem" }}>
+                    🎉
+                  </div>
+                )}
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.85) 100%)",
+                }} />
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "8px 10px" }}>
+                  <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: "0.82rem", color: "#fff", lineHeight: 1.2 }}>
+                    {album.title}
+                  </p>
+                  <p style={{ margin: 0, fontSize: "0.68rem", color: "rgba(255,255,255,0.5)" }}>
+                    {album.photoCount} photo{album.photoCount !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Saved gallery */}
+      {galleryPhotos.length > 0 && (
+        <div>
+          <p style={{ fontSize: "0.72rem", color: "rgba(240,237,232,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 12px" }}>
+            Saved
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "3px" }}>
+            {galleryPhotos.map((photo, index) => (
+              <div
+                key={photo.id}
+                onClick={() => onPhotoTap(galleryPhotos.map(p => p.photo_url), index)}
+                style={{ aspectRatio: "1", cursor: "pointer", overflow: "hidden", borderRadius: "4px" }}
+              >
+                <img src={photo.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {albums.length === 0 && galleryPhotos.length === 0 && (
+        <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(240,237,232,0.3)" }}>
+          <div style={{ fontSize: "2rem", marginBottom: "12px" }}>📷</div>
+          <p>No albums yet</p>
+          <p style={{ fontSize: "0.82rem" }}>Photos from your events will appear here</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventRow({ event, isOwn, onDelete, onTap }: {
   event: HostedEvent;
   isOwn: boolean;
   onDelete: () => void;
+  onTap: () => void;
 }) {
   const flareColor = event.flare ? (FLARE_COLORS[event.flare] || "#555") : "#555";
   const flareLabel = event.flare ? (FLARE_LABELS[event.flare] || event.flare) : null;
   const past = isPast(event.date);
 
   return (
-    <div style={{
-      display: "flex", gap: "12px",
-      padding: "14px 0",
-      borderBottom: "1px solid rgba(255,255,255,0.05)",
-      opacity: past ? 0.6 : 1,
-    }}>
+    <div
+      onClick={onTap}
+      style={{
+        display: "flex", gap: "12px",
+        padding: "14px 0",
+        borderBottom: "1px solid rgba(255,255,255,0.05)",
+        opacity: past ? 0.6 : 1,
+        cursor: "pointer",
+      }}
+    >
       {event.photo_url ? (
         <img
           src={event.photo_url}
@@ -188,7 +465,7 @@ function EventRow({ event, isOwn, onDelete }: {
           </h3>
           {isOwn && (
             <button
-              onClick={onDelete}
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
               style={{
                 background: "none", border: "none",
                 color: "rgba(240,237,232,0.3)", cursor: "pointer",

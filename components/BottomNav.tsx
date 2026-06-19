@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase";
 
 type Tab = "feed" | "discover" | "friends" | "events" | "profile";
 
@@ -31,6 +33,28 @@ function Icon({ id, active }: { id: Tab; active: boolean }) {
 }
 
 export default function BottomNav({ active }: { active: Tab }) {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+
+    async function fetchUnread() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("read", false);
+      setUnreadCount(count || 0);
+    }
+
+    fetchUnread();
+    interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <>
       {/* Mobile bottom nav */}
@@ -52,6 +76,7 @@ export default function BottomNav({ active }: { active: Tab }) {
               padding: "10px 0 6px",
               textDecoration: "none",
               color: isActive ? "#F0EDE8" : "rgba(240,237,232,0.35)",
+              position: "relative",
             }}>
               <Icon id={tab.id} active={isActive} />
               <span style={{ fontSize: "0.6rem", marginTop: "3px", fontWeight: isActive ? 600 : 400 }}>
@@ -87,9 +112,25 @@ export default function BottomNav({ active }: { active: Tab }) {
               background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
               color: isActive ? "#F0EDE8" : "rgba(240,237,232,0.45)",
               transition: "background 0.15s, color 0.15s",
+              position: "relative",
             }}>
               <Icon id={tab.id} active={isActive} />
               <span style={{ fontWeight: isActive ? 600 : 400, fontSize: "0.9rem" }}>{tab.label}</span>
+              {tab.id === "feed" && unreadCount > 0 && (
+                <span style={{
+                  marginLeft: "auto",
+                  background: "#e05a5a",
+                  color: "#fff",
+                  borderRadius: "20px",
+                  padding: "1px 6px",
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  minWidth: "18px",
+                  textAlign: "center",
+                }}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}

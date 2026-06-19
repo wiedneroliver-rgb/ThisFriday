@@ -81,8 +81,8 @@ export default function NotificationsPage() {
     if (!notif.actor_id) return;
     const supabase = createClient();
     await supabase.rpc("accept_friend_request", {
-      actor_id: notif.actor_id,
-      accepter_id: currentUserId,
+      p_requester_id: notif.actor_id,
+      p_accepter_id: currentUserId,
     });
     await supabase.from("notifications").delete().eq("id", notif.id);
     setNotifications((prev) => prev.filter((n) => n.id !== notif.id));

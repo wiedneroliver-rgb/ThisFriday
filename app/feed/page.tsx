@@ -256,6 +256,35 @@ export default function FeedPage() {
         </div>
 
         <BottomNav active="feed" />
+
+        {/* FAB: Create Plan */}
+        <button
+          onClick={() => router.push("/create")}
+          className="feed-fab"
+          style={{
+            position: "fixed",
+            bottom: "calc(70px + env(safe-area-inset-bottom, 8px))",
+            right: "20px",
+            width: 52,
+            height: 52,
+            borderRadius: "50%",
+            background: "#F0EDE8",
+            color: "#080808",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "1.6rem",
+            fontWeight: 300,
+            zIndex: 49,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+          }}
+          aria-label="Create a plan"
+        >
+          +
+        </button>
+        <style>{`@media (min-width: 768px) { .feed-fab { right: calc(20px) !important; bottom: 28px !important; } }`}</style>
       </div>
     </PageShell>
   );

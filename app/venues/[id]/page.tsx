@@ -44,7 +44,7 @@ export default function VenueDetailPage() {
   const [isVenueGoing, setIsVenueGoing] = useState(false);
   const [friendsGoing, setFriendsGoing] = useState<Profile[]>([]);
   const [goingCounts, setGoingCounts] = useState<Record<number, number>>({});
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [venueGoingLoading, setVenueGoingLoading] = useState(false);
@@ -98,13 +98,14 @@ export default function VenueDetailPage() {
     if (!venue) return;
     const supabase = createClient();
 
-    const dateStr = selectedDate.toISOString().split("T")[0];
+    const dateStr = selectedDate;
+    const nextDay = new Date(new Date(dateStr).getTime() + 86400000).toISOString().split("T")[0];
     const { data: eventData } = await supabase
       .from("events")
       .select("id,title,date,start_time,description,poster_url,guest_list_enabled,is_featured")
       .eq("venue", venue.name)
       .gte("date", dateStr)
-      .lt("date", new Date(selectedDate.getTime() + 86400000).toISOString().split("T")[0])
+      .lt("date", nextDay)
       .order("start_time", { ascending: true });
 
     setEvents(eventData || []);

@@ -104,22 +104,23 @@ export default function FeedPage() {
     const userId = user.id.toLowerCase();
     setCurrentUserId(userId);
 
-    // Get friends
+    // Get friends first (needed to build friend event query)
     const { data: friendRows } = await supabase
       .from("friends").select("friend_id").eq("user_id", userId);
     const friendIds = (friendRows || []).map((r: { friend_id: string }) => r.friend_id);
     const allIds = [...friendIds, userId];
 
-    // Get events from friends + discoverable
-    const { data: friendEvents } = await supabase
-      .from("hosted_events").select("*")
-      .in("host_id", allIds)
-      .order("created_at", { ascending: false });
-
-    const { data: publicEvents } = await supabase
-      .from("hosted_events").select("*")
-      .in("visibility", ["semi_public", "public"])
-      .order("created_at", { ascending: false });
+    // Fetch friend events + public events in parallel
+    const [{ data: friendEvents }, { data: publicEvents }] = await Promise.all([
+      supabase
+        .from("hosted_events").select("*")
+        .in("host_id", allIds)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("hosted_events").select("*")
+        .in("visibility", ["semi_public", "public"])
+        .order("created_at", { ascending: false }),
+    ]);
 
     const knownIds = new Set((friendEvents || []).map((e: HostedEvent) => e.id));
     const extra = (publicEvents || []).filter((e: HostedEvent) => !knownIds.has(e.id));
@@ -127,17 +128,17 @@ export default function FeedPage() {
 
     if (allEvents.length === 0) { setLoading(false); return; }
 
-    // Get host profiles
+    // Fetch host profiles + guest counts in parallel
     const hostIds = [...new Set(allEvents.map((e) => e.host_id))];
-    const { data: profiles } = await supabase
-      .from("profiles").select("id,display_name,avatar_url").in("id", hostIds);
-    const profileMap = Object.fromEntries((profiles || []).map((p: Profile) => [p.id, p]));
-
-    // Get guest counts
     const eventIds = allEvents.map((e) => e.id);
-    const { data: guests } = await supabase
-      .from("hosted_event_guests").select("hosted_event_id,user_id,status")
-      .in("hosted_event_id", eventIds);
+
+    const [{ data: profiles }, { data: guests }] = await Promise.all([
+      supabase.from("profiles").select("id,display_name,avatar_url").in("id", hostIds),
+      supabase.from("hosted_event_guests").select("hosted_event_id,user_id,status")
+        .in("hosted_event_id", eventIds),
+    ]);
+
+    const profileMap = Object.fromEntries((profiles || []).map((p: Profile) => [p.id, p]));
 
     const countMap: Record<string, number> = {};
     const joinedSet = new Set<string>();

@@ -410,10 +410,9 @@ export default function ProfilePage() {
         {/* Photo viewer for gallery */}
         {viewingPhoto && (
           <PhotoViewer
-            photos={viewingPhoto.map((p) => ({ id: p.id, photo_url: p.photo_url, user_id: userId }))}
+            photos={viewingPhoto.map((p) => ({ id: p.id, photo_url: p.photo_url, user_id: userId || "" }))}
             initialIndex={viewingIndex}
-            currentUserId={userId}
-            sourceType="gallery"
+            currentUserId={userId || ""}
             onClose={() => setViewingPhoto(null)}
             onDelete={(id) => { removeFromGallery(id); }}
           />

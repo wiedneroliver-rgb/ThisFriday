@@ -46,6 +46,12 @@ interface AlbumItem {
   sourceId: string;
 }
 
+interface Photo {
+  id: string;
+  photo_url: string;
+  user_id: string;
+}
+
 interface GalleryPhoto {
   id: string;
   photo_url: string;
@@ -84,7 +90,7 @@ export default function EventsPage() {
   const [albumsLoading, setAlbumsLoading] = useState(false);
   const [tab, setTab] = useState<"upcoming" | "past" | "albums">("upcoming");
   const [currentUserId, setCurrentUserId] = useState("");
-  const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
+  const [viewerPhotos, setViewerPhotos] = useState<Photo[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
 
   useEffect(() => { loadEvents(); }, []);
@@ -327,6 +333,7 @@ export default function EventsPage() {
         <PhotoViewer
           photos={viewerPhotos}
           initialIndex={viewerIndex}
+          currentUserId={currentUserId}
           onClose={() => setViewerPhotos([])}
         />
       )}
@@ -343,7 +350,7 @@ function AlbumsTab({
   albums: AlbumItem[];
   galleryPhotos: GalleryPhoto[];
   onAlbumTap: (album: AlbumItem) => void;
-  onPhotoTap: (photos: string[], index: number) => void;
+  onPhotoTap: (photos: Photo[], index: number) => void;
 }) {
   return (
     <div>
@@ -400,7 +407,7 @@ function AlbumsTab({
             {galleryPhotos.map((photo, index) => (
               <div
                 key={photo.id}
-                onClick={() => onPhotoTap(galleryPhotos.map(p => p.photo_url), index)}
+                onClick={() => onPhotoTap(galleryPhotos.map(p => ({ id: p.id, photo_url: p.photo_url, user_id: "" })), index)}
                 style={{ aspectRatio: "1", cursor: "pointer", overflow: "hidden", borderRadius: "4px" }}
               >
                 <img src={photo.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />

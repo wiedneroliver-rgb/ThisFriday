@@ -219,12 +219,10 @@ export default function UserProfilePage() {
             {profile.display_name || "Profile"}
           </h1>
           <BlockReportMenu
-            targetId={targetId}
-            currentUserId={currentUserId}
+            targetUserId={targetId}
+            currentUserId={currentUserId || ""}
             isBlocked={isBlocked}
             onBlock={handleBlock}
-            onUnblock={handleUnblock}
-            reportType="user"
           />
         </div>
 

@@ -20,11 +20,21 @@ interface HostedEvent {
   title: string;
   location: string;
   date: string;
+  end_time: string | null;
   flare: string | null;
   photo_url: string | null;
   description: string | null;
   visibility: string | null;
   created_at: string;
+}
+
+function isArchived(event: HostedEvent): boolean {
+  const now = Date.now();
+  if (event.end_time) {
+    return new Date(event.end_time).getTime() < now;
+  }
+  // No end_time: archive 4 hours after start
+  return new Date(event.date).getTime() + 4 * 3600 * 1000 < now;
 }
 
 interface FeedItem {
@@ -80,6 +90,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState("");
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   useEffect(() => {
     loadFeed();
@@ -241,18 +252,69 @@ export default function FeedPage() {
               <p style={{ fontSize: "1.1rem", marginBottom: "8px" }}>No plans yet</p>
               <p style={{ fontSize: "0.85rem" }}>Add friends to see their plans here</p>
             </div>
-          ) : (
-            items.map((item) => (
-              <FeedCard
-                key={item.event.id}
-                item={item}
-                currentUserId={currentUserId}
-                onJoin={() => toggleJoin(item)}
-                joining={joiningId === item.event.id}
-                onTap={() => router.push(`/events/${item.event.id}`)}
-              />
-            ))
-          )}
+          ) : (() => {
+            const active = items.filter((i) => !isArchived(i.event));
+            const archived = items.filter((i) => isArchived(i.event));
+            return (
+              <>
+                {active.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px 16px", color: "rgba(240,237,232,0.3)" }}>
+                    <p style={{ fontSize: "0.9rem" }}>No active plans right now</p>
+                  </div>
+                )}
+                {active.map((item) => (
+                  <FeedCard
+                    key={item.event.id}
+                    item={item}
+                    currentUserId={currentUserId}
+                    onJoin={() => toggleJoin(item)}
+                    joining={joiningId === item.event.id}
+                    onTap={() => router.push(`/events/${item.event.id}`)}
+                  />
+                ))}
+
+                {archived.length > 0 && (
+                  <div style={{ margin: "8px 12px 0" }}>
+                    <button
+                      onClick={() => setArchiveOpen((o) => !o)}
+                      style={{
+                        width: "100%",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: "14px",
+                        padding: "12px 16px",
+                        color: "rgba(240,237,232,0.45)",
+                        fontSize: "0.82rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        fontFamily: "var(--font-inter)",
+                      }}
+                    >
+                      <span>Past Plans · {archived.length}</span>
+                      <span style={{ fontSize: "0.7rem", transition: "transform 0.2s", transform: archiveOpen ? "rotate(180deg)" : "none" }}>▼</span>
+                    </button>
+                    {archiveOpen && (
+                      <div style={{ marginTop: "8px", opacity: 0.65 }}>
+                        {archived.map((item) => (
+                          <FeedCard
+                            key={item.event.id}
+                            item={item}
+                            currentUserId={currentUserId}
+                            onJoin={() => toggleJoin(item)}
+                            joining={joiningId === item.event.id}
+                            onTap={() => router.push(`/events/${item.event.id}`)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         <BottomNav active="feed" />

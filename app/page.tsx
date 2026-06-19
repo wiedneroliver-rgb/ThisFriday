@@ -1,28 +1,39 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase";
 
 function HomeContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const ref = searchParams.get("ref");
 
   useEffect(() => {
+    // Fallback: if auth check hangs for 3s, go to login anyway
+    const fallback = setTimeout(() => {
+      window.location.href = ref ? `/login?ref=${encodeURIComponent(ref)}` : "/login";
+    }, 3000);
+
     async function checkAuth() {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        router.replace("/feed");
-      } else {
-        const loginUrl = ref ? `/login?ref=${encodeURIComponent(ref)}` : "/login";
-        router.replace(loginUrl);
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        clearTimeout(fallback);
+        if (user) {
+          window.location.href = "/feed";
+        } else {
+          window.location.href = ref ? `/login?ref=${encodeURIComponent(ref)}` : "/login";
+        }
+      } catch {
+        clearTimeout(fallback);
+        window.location.href = "/login";
       }
     }
     checkAuth();
-  }, [router, ref]);
+
+    return () => clearTimeout(fallback);
+  }, [ref]);
 
   return (
     <div style={{

@@ -566,9 +566,10 @@ export default function EventDetailPage() {
         )}
         {showInvite && (
           <InviteFriendsModal
-            currentUserId={userId!}
+            userId={userId!}
+            selected={[]}
             onClose={() => setShowInvite(false)}
-            onInvite={async (ids) => {
+            onChange={async (ids) => {
               const supabase = createClient();
               for (const uid of ids) {
                 await supabase.from("hosted_event_guests").upsert({

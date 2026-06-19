@@ -70,10 +70,14 @@ export default function FriendsPage() {
       .eq("user_id", userId)
       .eq("type", "friend_request");
 
+    // Supabase returns the foreign key join as an array; take first element
     const receivedProfiles: Profile[] = (receivedNotifs || []).map((n: {
       actor_id: string;
-      profiles: { id: string; display_name: string | null; avatar_url: string | null; username: string | null } | null;
-    }) => n.profiles as Profile).filter(Boolean);
+      profiles: { id: string; display_name: string | null; avatar_url: string | null; username: string | null }[] | { id: string; display_name: string | null; avatar_url: string | null; username: string | null } | null;
+    }) => {
+      const p = Array.isArray(n.profiles) ? n.profiles[0] : n.profiles;
+      return p as Profile;
+    }).filter(Boolean);
     setFriendRequests(receivedProfiles);
     setPendingReceivedIds(new Set(receivedProfiles.map((p) => p.id)));
 

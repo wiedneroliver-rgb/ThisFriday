@@ -91,71 +91,81 @@ export default function FeedPage() {
   const [currentUserId, setCurrentUserId] = useState("");
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadFeed();
   }, []);
 
   async function loadFeed() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
+    try {
+      const supabase = createClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!user) { router.push("/login"); return; }
 
-    const userId = user.id.toLowerCase();
-    setCurrentUserId(userId);
+      const userId = user.id.toLowerCase();
+      setCurrentUserId(userId);
 
-    // Get friends first (needed to build friend event query)
-    const { data: friendRows } = await supabase
-      .from("friends").select("friend_id").eq("user_id", userId);
-    const friendIds = (friendRows || []).map((r: { friend_id: string }) => r.friend_id);
-    const allIds = [...friendIds, userId];
+      // Get friends first (needed to build friend event query)
+      const { data: friendRows } = await supabase
+        .from("friends").select("friend_id").eq("user_id", userId);
+      const friendIds = (friendRows || []).map((r: { friend_id: string }) => r.friend_id);
+      const allIds = [...friendIds, userId];
 
-    // Fetch friend events + public events in parallel
-    const [{ data: friendEvents }, { data: publicEvents }] = await Promise.all([
-      supabase
-        .from("hosted_events").select("*")
-        .in("host_id", allIds)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("hosted_events").select("*")
-        .in("visibility", ["semi_public", "public"])
-        .order("created_at", { ascending: false }),
-    ]);
+      // Fetch friend events + public events in parallel
+      const [{ data: friendEvents, error: fe }, { data: publicEvents, error: pe }] = await Promise.all([
+        supabase
+          .from("hosted_events").select("*")
+          .in("host_id", allIds)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("hosted_events").select("*")
+          .in("visibility", ["semi_public", "public"])
+          .order("created_at", { ascending: false }),
+      ]);
+      if (fe) throw fe;
+      if (pe) throw pe;
 
-    const knownIds = new Set((friendEvents || []).map((e: HostedEvent) => e.id));
-    const extra = (publicEvents || []).filter((e: HostedEvent) => !knownIds.has(e.id));
-    const allEvents: HostedEvent[] = [...(friendEvents || []), ...extra];
+      const knownIds = new Set((friendEvents || []).map((e: HostedEvent) => e.id));
+      const extra = (publicEvents || []).filter((e: HostedEvent) => !knownIds.has(e.id));
+      const allEvents: HostedEvent[] = [...(friendEvents || []), ...extra];
 
-    if (allEvents.length === 0) { setLoading(false); return; }
+      if (allEvents.length === 0) { setLoading(false); return; }
 
-    // Fetch host profiles + guest counts in parallel
-    const hostIds = [...new Set(allEvents.map((e) => e.host_id))];
-    const eventIds = allEvents.map((e) => e.id);
+      // Fetch host profiles + guest counts in parallel
+      const hostIds = [...new Set(allEvents.map((e) => e.host_id))];
+      const eventIds = allEvents.map((e) => e.id);
 
-    const [{ data: profiles }, { data: guests }] = await Promise.all([
-      supabase.from("profiles").select("id,display_name,avatar_url").in("id", hostIds),
-      supabase.from("hosted_event_guests").select("hosted_event_id,user_id,status")
-        .in("hosted_event_id", eventIds),
-    ]);
+      const [{ data: profiles }, { data: guests }] = await Promise.all([
+        supabase.from("profiles").select("id,display_name,avatar_url").in("id", hostIds),
+        supabase.from("hosted_event_guests").select("hosted_event_id,user_id,status")
+          .in("hosted_event_id", eventIds),
+      ]);
 
-    const profileMap = Object.fromEntries((profiles || []).map((p: Profile) => [p.id, p]));
+      const profileMap = Object.fromEntries((profiles || []).map((p: Profile) => [p.id, p]));
 
-    const countMap: Record<string, number> = {};
-    const joinedSet = new Set<string>();
-    for (const g of guests || []) {
-      if (g.status !== "collaborator") countMap[g.hosted_event_id] = (countMap[g.hosted_event_id] || 0) + 1;
-      if (g.user_id === userId && g.status === "accepted") joinedSet.add(g.hosted_event_id);
+      const countMap: Record<string, number> = {};
+      const joinedSet = new Set<string>();
+      for (const g of guests || []) {
+        if (g.status !== "collaborator") countMap[g.hosted_event_id] = (countMap[g.hosted_event_id] || 0) + 1;
+        if (g.user_id === userId && g.status === "accepted") joinedSet.add(g.hosted_event_id);
+      }
+
+      const feedItems: FeedItem[] = allEvents.map((event) => ({
+        event,
+        host: profileMap[event.host_id] || null,
+        goingCount: countMap[event.id] || 0,
+        isJoined: joinedSet.has(event.id),
+      }));
+
+      setItems(feedItems);
+      setLoading(false);
+    } catch (err) {
+      console.error("Feed load error:", err);
+      setError(err instanceof Error ? err.message : "Failed to load feed");
+      setLoading(false);
     }
-
-    const feedItems: FeedItem[] = allEvents.map((event) => ({
-      event,
-      host: profileMap[event.host_id] || null,
-      goingCount: countMap[event.id] || 0,
-      isJoined: joinedSet.has(event.id),
-    }));
-
-    setItems(feedItems);
-    setLoading(false);
   }
 
   async function toggleJoin(item: FeedItem) {
@@ -247,6 +257,17 @@ export default function FeedPage() {
           {loading ? (
             <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(240,237,232,0.3)" }}>
               Loading...
+            </div>
+          ) : error ? (
+            <div style={{ textAlign: "center", padding: "60px 16px", color: "rgba(240,237,232,0.4)" }}>
+              <p style={{ fontSize: "1rem", marginBottom: "12px" }}>Something went wrong</p>
+              <p style={{ fontSize: "0.8rem", color: "rgba(240,237,232,0.25)", marginBottom: "16px", wordBreak: "break-all" }}>{error}</p>
+              <button
+                onClick={() => { setError(null); setLoading(true); loadFeed(); }}
+                style={{ background: "#F0EDE8", color: "#080808", border: "none", borderRadius: "20px", padding: "8px 20px", fontWeight: 700, cursor: "pointer" }}
+              >
+                Retry
+              </button>
             </div>
           ) : items.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 16px", color: "rgba(240,237,232,0.3)" }}>

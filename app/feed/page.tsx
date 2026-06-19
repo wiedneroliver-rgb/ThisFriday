@@ -100,9 +100,11 @@ export default function FeedPage() {
   async function loadFeed() {
     try {
       const supabase = createClient();
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      if (!user) { router.push("/login"); return; }
+      // Use getSession (local storage, instant) to avoid a network round-trip
+      // that can return null before the session cookie is persisted after login.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push("/login"); return; }
+      const user = session.user;
 
       const userId = user.id.toLowerCase();
       setCurrentUserId(userId);

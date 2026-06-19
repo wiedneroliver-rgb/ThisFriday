@@ -1,39 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { createClient } from "@/lib/supabase";
 
-function HomeContent() {
-  const searchParams = useSearchParams();
-  const ref = searchParams.get("ref");
-
+// Middleware handles the redirect at the edge. This is a fallback only.
+export default function Home() {
   useEffect(() => {
-    // Fallback: if auth check hangs for 3s, go to login anyway
-    const fallback = setTimeout(() => {
-      window.location.href = ref ? `/login?ref=${encodeURIComponent(ref)}` : "/login";
-    }, 3000);
-
-    async function checkAuth() {
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        clearTimeout(fallback);
-        if (user) {
-          window.location.href = "/feed";
-        } else {
-          window.location.href = ref ? `/login?ref=${encodeURIComponent(ref)}` : "/login";
-        }
-      } catch {
-        clearTimeout(fallback);
-        window.location.href = "/login";
-      }
-    }
-    checkAuth();
-
-    return () => clearTimeout(fallback);
-  }, [ref]);
+    window.location.href = "/feed";
+  }, []);
 
   return (
     <div style={{
@@ -49,13 +22,5 @@ function HomeContent() {
         ThisFriday
       </span>
     </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense>
-      <HomeContent />
-    </Suspense>
   );
 }
